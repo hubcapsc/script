@@ -1,0 +1,450 @@
+#!/bin/bash
+# TODO:
+#  mount the results bucket as a filesystem on OB_IO500_NAMEa
+#  delete all instances at cleanup and depend upon the results bucket?
+
+# function to call on normal exit and on any failure
+ob_cleanup()
+{
+	rm -f "$OB_OFS_CONFIG_FILE_NAME"
+	rm -f hostfile
+	echo " clean up test instances"
+	exit
+}
+
+OB_REGION="us-east1"
+# Must use us-central1-a zone for any vCPU count over 24
+OB_ZONE="us-east1-b"
+OB_PROJECT="orangefsdev"
+gcloud config set compute/region "$OB_REGION"
+gcloud config set compute/zone "$OB_ZONE"
+gcloud config set project "$OB_PROJECT"
+
+OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500"
+OB_OFS_MACHINE=" --machine-type=n1-standard-1"
+#OB_OFS_MACHINE=" --machine-type=n2-standard-80"
+
+OB_OFS_NAME="pattern-ofs-"
+OB_IO500_NAME="pattern-io500-"
+
+OB_OFS_SERVERS=3	# total number of ofs servers to create
+
+# MAX per instance: 24 local SSD partitions - 9 TB - 2.4 million read IOPS
+# My observation is that nvme device names will be /dev/nvme0n1 - /dev/nvme0n24
+# valid number of ssd drives per instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 24]
+OB_SSD_NUM=1
+OB_SSD_ARG=" --local-ssd interface=nvme"
+OB_SSD_DEV="/dev/nvme0n"
+OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
+
+OB_NET_INT=""
+#OB_NET_INT=" --network-interface=nic-type=GVNIC"
+OB_NET_PERF=""
+#OB_NET_PERF=" --network-performance-configs=total-egress-bandwidth-tier=TIER_1"
+
+
+# Here we can configure some servers to be data only, some to be meta only,
+# and the rest will be both.
+OB_OFS_DATA=0		# number of ofs data-only servers 
+OB_OFS_META=0		# number of ofs meta-only servers
+
+OB_OFS_CONFIG="pvfs2-genconfig --iospec "
+OB_OFS_CONFIG_FILE_NAME="orangefs.conf"
+
+# After starting the instances we'll test their ssh ports this
+# many times before we give up and exit.
+OB_ATTEMPTS=5
+OB_SLEEP=5	# seconds to sleep between attempts
+
+OB_CREATE="gcloud compute instances create "
+
+if (( "$OB_OFS_DATA"+"$OB_OFS_META">"$OB_OFS_SERVERS" ))
+then
+	echo "sum of pure data + pure meta must not exceed total server number."
+	ob_cleanup
+fi
+
+OB_IO500_CLIENTS=1	# total number of io500 clients to create
+OB_IO500_MACHINE=" --machine-type=n1-standard-1"
+
+# indexed array of alphabet letters to append to host names for differentiation
+OB_ALPHA=( {0,{a..z},{A..Z}} )
+OB_MAX=52
+
+# create arrays of data and meta servers and use them to build
+# a pvfs2-genconfig command, which will end up looking something like this:
+# pvfs2-genconfig --iospec one:3334,two:3334,three:3334,four:3334 \
+#  --metaspec one:3334,two:3334 --quiet pvfs.conf
+for i in `seq 1 $OB_OFS_SERVERS`
+do
+	if [ "$OB_OFS_DATA" -gt "0" ]
+	then
+		OB_DATA_ARRAY+=("$OB_OFS_NAME""${OB_ALPHA[i]}"":3334")
+		OB_OFS_DATA=$(( OB_OFS_DATA - 1 ))
+	elif [ "$OB_OFS_META" -gt "0" ]
+	then
+		OB_META_ARRAY+=("$OB_OFS_NAME""${OB_ALPHA[i]}"":3334")
+		OB_OFS_META=$(( OB_OFS_META - 1 ))
+	else
+		OB_DATA_ARRAY+=("$OB_OFS_NAME""${OB_ALPHA[i]}"":3334")
+		OB_META_ARRAY+=("$OB_OFS_NAME""${OB_ALPHA[i]}"":3334")
+	fi
+done
+
+# add the list of data servers to the pvfs2-genconfig command
+for i in "${OB_DATA_ARRAY[@]}"
+do
+	OB_OFS_CONFIG="$OB_OFS_CONFIG"`echo -n $i`","
+done
+# chop off the trailing comma and get ready for the meta list
+OB_OFS_CONFIG=`echo ${OB_OFS_CONFIG%?}`" --metaspec "
+for i in "${OB_META_ARRAY[@]}"
+do
+	OB_OFS_CONFIG="$OB_OFS_CONFIG"`echo -n $i`","
+done
+# chop off the trailing comma and finish building the command
+OB_OFS_CONFIG=`echo ${OB_OFS_CONFIG%?}`" --quiet ""$OB_OFS_CONFIG_FILE_NAME"
+
+eval "$OB_OFS_CONFIG"
+sed -i -n '/ServerOptions/q;p' "$OB_OFS_CONFIG_FILE_NAME"
+sed -i 's/_tcp....//g' "$OB_OFS_CONFIG_FILE_NAME"
+
+# associative array for host names to ip addrs
+declare -A OB_EX_ETC_HOSTS # external addrs
+declare -A OB_IN_ETC_HOSTS # internal addrs
+
+# create the ofs servers and collect their external and internal IP addrs
+for i in `seq 1 $OB_OFS_SERVERS`
+do
+	OB_CMD="$OB_CREATE""$OB_OFS_NAME""${OB_ALPHA[i]}"
+	OB_CMD="$OB_CMD""$OB_IMAGE""$OB_OFS_MACHINE"
+	OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
+	for j in `seq 1 $OB_SSD_NUM`
+	do
+		OB_CMD="$OB_CMD""$OB_SSD_ARG"
+	done
+#	echo $OB_CMD
+#	exit
+	eval $OB_CMD
+	if [ "$?" -gt "0" ]
+	then
+		echo "creation of ""$OB_OFS_NAME""${OB_ALPHA[i]}"" failed."
+		ob_cleanup
+	fi
+	OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]=`gcloud compute instances describe "$OB_OFS_NAME""${OB_ALPHA[i]}" --format='get(networkInterfaces[0].accessConfigs[0].natIP)'`
+	if [ "$?" -gt "0" ]
+	then
+		echo "no external ip for ""$OB_OFS_NAME""${OB_ALPHA[i]}""."
+		ob_cleanup
+	fi
+	OB_IN_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]=`gcloud compute instances describe "$OB_OFS_NAME""${OB_ALPHA[i]}" --format='get(networkInterfaces[0].networkIP)'`
+	if [ "$?" -gt "0" ]
+	then
+		echo "no internal ip for ""$OB_OFS_NAME""${OB_ALPHA[i]}""."
+		ob_cleanup
+	fi
+done
+
+echo ""
+
+# create the io500 servers and collect their external and internal IP addrs
+for i in `seq 1 $OB_IO500_CLIENTS`
+do
+	OB_CMD="$OB_CREATE""$OB_IO500_NAME""${OB_ALPHA[i]}"
+	OB_CMD="$OB_CMD""$OB_IMAGE""$OB_IO500_MACHINE"
+#	echo $OB_CMD
+	eval $OB_CMD
+	OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]=`gcloud compute instances describe "$OB_IO500_NAME""${OB_ALPHA[i]}" --format='get(networkInterfaces[0].accessConfigs[0].natIP)'`
+	OB_IN_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]=`gcloud compute instances describe "$OB_IO500_NAME""${OB_ALPHA[i]}" --format='get(networkInterfaces[0].networkIP)'`
+done
+
+# Don't continue if unable to connect to ssh port in the allotted time.
+echo -n "Testing connectivity to port 22 on orangefs servers. "
+for i in `seq 1 $OB_OFS_SERVERS`
+do
+	OB_TRYS=$OB_ATTEMPTS
+	while [ "$OB_TRYS" -gt "0" ] && \
+		! nc -z ${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]} 22
+	do
+		sleep $OB_SLEEP
+		OB_TRYS=$(( OB_TRYS - 1 ))
+		if [ "$OB_TRYS" -eq "0" ]
+		then
+			echo -e "\nno response from " \
+			"${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}" \
+			"on port 22."
+			ob_cleanup
+		fi
+	done
+	echo -n "."
+done
+echo " done."
+
+echo -n "add ofs server internal IP addrs to each servers's host file. "
+# make a local file of host lines to add to all the cloud servers.
+for i in `seq 1 $OB_OFS_SERVERS`
+do
+	OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+	echo "$OB_IN_IP"" ""$OB_HOST" >> hostfile
+done
+# append the local host file onto the end of all the server /etc/host files.
+for i in `seq 1 $OB_OFS_SERVERS`
+do
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+	# As we run tests over and over, IP addresses will end up
+	# getting reused. We want to run tests without having to
+	# do a bunch of .ssh/known_hosts maintenance, we'll turn
+	# off host key checking and fling the WARNING message to dev null.
+	scp -o "StrictHostKeyChecking no" \
+		hostfile "$OB_EX_IP": > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nscp host file to :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo sh -c \'cat hostfile \>\> /etc/hosts\' > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nappend hostfile on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	echo -n "."
+done
+echo " done."
+
+# One SSD per orangefs server.
+if [ "$OB_SSD_NUM" -eq "1" ]
+then
+	OB_LABEL="parted /dev/nvme0n1 --script mklabel gpt"
+	OB_PARTITION="parted -a optimal /dev/nvme0n1 --script mkpart "
+	OB_PARTITION="$OB_PARTITION""primary ext4 2048 375GB"
+	OB_MKFS="mkfs.ext4 -F /dev/nvme0n1p1"
+	OB_MOUNT="mount /dev/nvme0n1p1 /var/lib/orangefs"
+	for i in `seq 1 $OB_OFS_SERVERS`
+	do
+		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
+		OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+		echo "mount single SSD on ""$OB_HOST"
+
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
+			\'"$OB_LABEL"\' > /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo "SSD labeling failed for ""$OB_HOST"
+			ob_cleanup
+		fi
+
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
+			\'"$OB_PARTITION"\' > /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo "SSD partitioning failed for ""$OB_HOST"
+			ob_cleanup
+		fi
+
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
+			\'"$OB_MKFS"\' > /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo "SSD mkfs failed for ""$OB_HOST"
+			ob_cleanup
+		fi
+
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
+			\'"$OB_MOUNT"\' > /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo "SSD mount failed for ""$OB_HOST"
+			ob_cleanup
+		fi
+		echo "single SSD mounted on ""$OB_HOST"
+	done
+fi
+
+# More than one SSD per orangefs server.
+if [ "$OB_SSD_NUM" -gt "1" ]
+then
+	for i in `seq 1 $OB_OFS_SERVERS`
+	do
+		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
+		OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+		echo "mount RAID filesystem for ""$OB_HOST"
+		OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
+		OB_MDADM="$OB_MDADM""$OB_SSD_NUM"
+
+		for j in `seq 1 $OB_SSD_NUM`
+		do
+			OB_MDADM="$OB_MDADM"" $OB_SSD_DEV""$j"
+		done
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
+			\'"$OB_MDADM"\' > /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo "mdadm failed for ""$OB_HOST"
+			ob_cleanup
+		fi
+
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
+			\'mkfs.ext4 -F /dev/md0\' > /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo "mkfs failed for ""$OB_HOST"
+			ob_cleanup
+		fi
+
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
+			\'mount /dev/md0 /var/lib/orangefs\' > /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo "mount failed for ""$OB_HOST"
+			ob_cleanup
+		fi
+		echo "RAID mounted on ""$OB_HOST"
+	done
+fi
+
+echo -n "start ofs servers. "
+for i in `seq 1 $OB_OFS_SERVERS`
+do
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	scp -o "StrictHostKeyChecking no" \
+		"$OB_OFS_CONFIG_FILE_NAME" "$OB_EX_IP": > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nscp ofs config to :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo cp "$OB_OFS_CONFIG_FILE_NAME" /etc > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\ncp ofs config to /etc/ on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo pvfs2-server /etc/"$OB_OFS_CONFIG_FILE_NAME" -f \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nofs storage creation on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo pvfs2-server /etc/"$OB_OFS_CONFIG_FILE_NAME" \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nofs server on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	echo -n "."
+done
+echo " done."
+echo
+
+# check connectivity on io500 clients.
+echo -n "Testing connectivity to port 22 on io500 servers. "
+for i in `seq 1 $OB_IO500_CLIENTS`
+do
+	OB_TRYS=$OB_ATTEMPTS
+	while [ "$OB_TRYS" -gt "0" ] && \
+		! nc -z ${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]} 22
+	do
+		sleep $OB_SLEEP
+		OB_TRYS=$(( OB_TRYS - 1 ))
+		if [ "$OB_TRYS" -eq "0" ]
+		then
+			echo -e "\nno response from " \
+			"${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}" \
+			"on port 22."
+			ob_cleanup
+		fi
+	done
+	echo -n "."
+done
+echo " done."
+
+echo -n "add io500 client internal IP addrs to each clients's host file. "
+for i in `seq 1 $OB_IO500_CLIENTS`
+do
+	OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	echo "$OB_IN_IP"" ""$OB_HOST" >> hostfile
+done
+# append the local host file onto the end of all the io500 client host files.
+for i in `seq 1 $OB_IO500_CLIENTS`
+do
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	scp -o "StrictHostKeyChecking no" \
+		hostfile "$OB_EX_IP": > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nscp host file to :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo sh -c \'cat hostfile \>\> /etc/hosts\' > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nappend hostfile on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	echo -n "."
+done
+echo " done."
+
+echo -n "mount the orangefs filesystems on the io500 clients. "
+for i in `seq 1 $OB_IO500_CLIENTS`
+do
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+
+	# load the orangefs kernel module...
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo insmod /lib/modules/\`uname -r\`/kernel/fs/orangefs/orangefs.ko.xz > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nload kernel module on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	
+	# start the client
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo pvfs2-client -p /usr/sbin/pvfs2-client-core \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nstart client on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+
+	# create /pvfsmnt
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo mkdir /pvfsmnt > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nmkdir /pvfsmnt on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+
+	# mount the filesystem. Notice what "$OB_OFS_NAME"a resolves to.
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo mount -t pvfs2 \
+			tcp://"$OB_OFS_NAME"a:3334/orangefs /pvfsmnt \
+				> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nmount to /pvfsmnt on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	echo -n "."
+done
+echo " done."
+
+echo
+ob_cleanup
