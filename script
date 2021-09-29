@@ -6,8 +6,6 @@
 # function to call on normal exit and on any failure
 ob_cleanup()
 {
-	rm -f "$OB_OFS_CONFIG_FILE_NAME"
-	rm -f hostfile
 	echo " clean up test instances"
 	exit
 }
@@ -20,19 +18,24 @@ gcloud config set compute/region "$OB_REGION"
 gcloud config set compute/zone "$OB_ZONE"
 gcloud config set project "$OB_PROJECT"
 
-OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500"
-OB_OFS_MACHINE=" --machine-type=n1-standard-1"
-#OB_OFS_MACHINE=" --machine-type=n2-standard-80"
+#OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500"
+OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-2"
 
 OB_OFS_NAME="pattern-ofs-"
 OB_IO500_NAME="pattern-io500-"
 
-OB_OFS_SERVERS=3	# total number of ofs servers to create
+# total number of servers and clients to create
+OB_OFS_SERVERS=1
+OB_OFS_MACHINE=" --machine-type=n1-standard-1"
+#OB_OFS_MACHINE=" --machine-type=n2-standard-80"
+
+OB_IO500_CLIENTS=2
+OB_IO500_MACHINE=" --machine-type=n1-standard-1"
 
 # MAX per instance: 24 local SSD partitions - 9 TB - 2.4 million read IOPS
 # My observation is that nvme device names will be /dev/nvme0n1 - /dev/nvme0n24
 # valid number of ssd drives per instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 24]
-OB_SSD_NUM=1
+OB_SSD_NUM=0
 OB_SSD_ARG=" --local-ssd interface=nvme"
 OB_SSD_DEV="/dev/nvme0n"
 OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
@@ -50,6 +53,9 @@ OB_OFS_META=0		# number of ofs meta-only servers
 
 OB_OFS_CONFIG="pvfs2-genconfig --iospec "
 OB_OFS_CONFIG_FILE_NAME="orangefs.conf"
+# clean up any leftover old config files or hostfiles from previous runs.
+rm -f "$OB_OFS_CONFIG_FILE_NAME"
+rm -f hostfile
 
 # After starting the instances we'll test their ssh ports this
 # many times before we give up and exit.
@@ -63,9 +69,6 @@ then
 	echo "sum of pure data + pure meta must not exceed total server number."
 	ob_cleanup
 fi
-
-OB_IO500_CLIENTS=1	# total number of io500 clients to create
-OB_IO500_MACHINE=" --machine-type=n1-standard-1"
 
 # indexed array of alphabet letters to append to host names for differentiation
 OB_ALPHA=( {0,{a..z},{A..Z}} )
