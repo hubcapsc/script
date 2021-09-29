@@ -229,7 +229,7 @@ then
 	for i in `seq 1 $OB_OFS_SERVERS`
 	do
 		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-		OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+		OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
 		echo "mount single SSD on ""$OB_HOST"
 
 		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
@@ -273,7 +273,7 @@ then
 	for i in `seq 1 $OB_OFS_SERVERS`
 	do
 		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-		OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+		OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
 		echo "mount RAID filesystem for ""$OB_HOST"
 		OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
 		OB_MDADM="$OB_MDADM""$OB_SSD_NUM"
@@ -313,7 +313,7 @@ echo -n "start ofs servers. "
 for i in `seq 1 $OB_OFS_SERVERS`
 do
 	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
 	scp -o "StrictHostKeyChecking no" \
 		"$OB_OFS_CONFIG_FILE_NAME" "$OB_EX_IP": > /dev/null 2>&1
 	if [ "$?" -gt "0" ]
