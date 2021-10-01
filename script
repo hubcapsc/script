@@ -57,6 +57,7 @@ OB_OFS_CONFIG_FILE_NAME="orangefs.conf"
 # clean up any leftover old config files or hostfiles from previous runs.
 rm -f "$OB_OFS_CONFIG_FILE_NAME"
 rm -f hostfile
+rm -f pub.keys
 
 # After starting the instances we'll test their ssh ports this
 # many times before we give up and exit.
@@ -400,6 +401,53 @@ do
 		ob_cleanup
 	fi
 	echo -n "."
+done
+echo " done."
+
+# "third party" ssh tools such as mpirun need to be usable
+# on the clients without interaction from a human... set up
+# passwordless ssh access between them.
+echo -n "create ssh key pairs for the clients"
+for i in `seq 1 $OB_IO500_CLIENTS`
+do
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		ssh-keygen -b 2048 -t rsa -f /tmp/id_rsa -q -N \"\" \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nssh-keygen on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		cp /tmp/{id_rsa,id_rsa.pub} .ssh > /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\ncopy ssh keys on :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		cat /tmp/id_rsa.pub >> pub.keys 2> /dev/null
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\nretrieve pub key from :"$OB_HOST": failed."
+		ob_cleanup
+	fi
+	echo -n "."
+done
+for i in `seq 1 $OB_IO500_CLIENTS`
+do
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	cat pub.keys | \
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+			"cat >> .ssh/authorized_keys" 2> /dev/null
+	if [ "$?" -gt "0" ]
+	then
+		echo -e "\n copy public keys to :"$OB_HOST": failed."
+		ob_cleanup
+	fi
 done
 echo " done."
 
