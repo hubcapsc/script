@@ -19,8 +19,12 @@ gcloud config set compute/zone "$OB_ZONE"
 gcloud config set project "$OB_PROJECT"
 
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500"
-OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-2"
+#OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-2"
+OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-3"
 OB_SCOPE=" --scopes=cloud-platform"
+
+# persistant place for results and configs and whatever.
+OB_BUCKET="gs://hubcap_bucket"
 
 OB_OFS_NAME="pattern-ofs-"
 OB_IO500_NAME="pattern-io500-"
@@ -62,7 +66,9 @@ rm -f pub.keys
 # After starting the instances we'll test their ssh ports this
 # many times before we give up and exit.
 OB_ATTEMPTS=5
-OB_SLEEP=5	# seconds to sleep between attempts
+
+# seconds to sleep between attempts
+OB_SLEEP=5
 
 OB_CREATE="gcloud compute instances create "
 
@@ -509,6 +515,61 @@ do
 	echo -n "."
 done
 echo " done."
+
+# copy config files over to the "a" io500 client and run io500
+if [ "$OB_IO500_CLIENTS" -gt "0" ]
+then
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""a"]}"
+	OB_HOST="$OB_IO500_NAME""a"
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo gsutil cp "$OB_BUCKET"/config-custom.ini io500 \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo "bucket copy custom config to :""$OB_HOST"": failed."
+		ob_cleanup
+	fi
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sudo gsutil cp "$OB_BUCKET"/io500.sh io500 \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo "bucket copy io500.sh to :""$OB_HOST"": failed."
+		ob_cleanup
+	fi
+
+	# delete all the orangefs servers from the hostfile
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		sed -i "/${OB_OFS_NAME}/d" hostfile \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo "purge of servers in hostfile on :""$OB_HOST"": failed."
+		ob_cleanup
+	fi
+
+	# copy remaining client hostnames in hostfile to io500/hostfile.
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		"sed 's/^.* //g' hostfile > io500/hostfile" \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo "hostfile copy to io500 dir on :""$OB_HOST"": failed."
+		ob_cleanup
+	fi
+
+set -x
+	# run io500.sh
+	echo "start io500 on :""$OB_HOST"":."
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+		'(. .bash_profile;cd io500;. io500.sh config-custom.ini)' \
+			> /dev/null 2>&1
+	if [ "$?" -gt "0" ]
+	then
+		echo "io500 failed to run on :""$OB_HOST"":."
+		ob_cleanup
+	fi
+fi
 
 echo
 ob_cleanup
