@@ -18,8 +18,15 @@ gcloud config set compute/zone "$OB_ZONE"
 gcloud config set project "$OB_PROJECT"
 
 #OB_MPI_TYPE="intel"
-#OB_MPI_TYPE="openmpi"
-OB_MPI_TYPE="vanilla"
+OB_MPI_TYPE="openmpi"
+#OB_MPI_TYPE="vanilla"
+
+# "slots=N" affects the number of processors to use per client
+OB_SLOTS=0
+#OB_SLOTS=1
+
+# destination location for io500 config files
+OB_IO500_CONFIG="/var/tmp"
 
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-2"
@@ -539,6 +546,15 @@ then
 	echo "purge of ip addrs in hostfile failed."
 	ob_cleanup
 fi
+if [ "$OB_SLOTS" -gt "0" ]
+then
+	sed -i "s/$/ slots=$OB_SLOTS/" hostfile
+	if [ "$?" -gt "0" ]
+	then
+		echo "adding slots to hostfile failed."
+		ob_cleanup
+	fi
+fi
 
 if [ "$OB_MPI_TYPE" = "openmpi" ]
 then
@@ -589,17 +605,16 @@ do
 	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
 	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
 	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo gsutil cp "$OB_BUCKET"/config-custom.ini \
-		   "$OB_MPI_REPO"/io500 \
-			> /dev/null 2>&1
+		gsutil cp "$OB_BUCKET"/config-custom.ini \
+		   "$OB_IO500_CONFIG" > /dev/null 2>&1
 	if [ "$?" -gt "0" ]
 	then
 		echo "bucket copy custom config to :""$OB_HOST"": failed."
 		ob_cleanup
 	fi
 	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo gsutil cp "$OB_BUCKET"/io500.sh "$OB_MPI_REPO"/io500 \
-			> /dev/null 2>&1
+		gsutil cp "$OB_BUCKET"/io500.sh \
+			"$OB_IO500_CONFIG" > /dev/null 2>&1
 	if [ "$?" -gt "0" ]
 	then
 		echo "bucket copy io500.sh to :""$OB_HOST"": failed."
@@ -608,7 +623,7 @@ do
 
 	# copy client hostnames in hostfile to io500/hostfile.
 	scp -o "StrictHostKeyChecking no" \
-		hostfile "$OB_EX_IP":"$OB_MPI_REPO"/io500 > /dev/null 2>&1
+		hostfile "$OB_EX_IP":"$OB_IO500_CONFIG" > /dev/null 2>&1
 	if [ "$?" -gt "0" ]
 	then
 		echo -e "\nscp client list file to :"$OB_HOST": failed."
@@ -622,31 +637,25 @@ if [ "$OB_IO500_CLIENTS" -gt "0" ]
 then
         OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""a"]}"
         OB_HOST="$OB_IO500_NAME""a"
-set -x
 
 	# run io500.sh
 	echo "start io500 on :""$OB_HOST"":."
 	if [ "$OB_MPI_TYPE" = "intel" ]
 	then
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		  '(. /opt/intel/oneapi/setvars.sh; \
-		     cd '"$OB_MPI_REPO"'/io500; \
-			. io500.sh config-custom.ini)' \
-				> /dev/null 2>&1
+		  mpi_setup_script="/opt/intel/oneapi/setvars.sh"
 	elif [ "$OB_MPI_TYPE" = "openmpi" ]
 	then
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		  '(. '"$OB_MPI_REPO"'/setvars_openmpi.sh; \
-		     cd '"$OB_MPI_REPO"'/io500; \
-			. io500.sh config-custom.ini)' \
-				> /dev/null 2>&1
+		  mpi_setup_script="$OB_MPI_REPO"/setvars_openmpi.sh
 	else
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		  '(. '"$OB_MPI_REPO"'/setvars_vanilla.sh; \
-		     cd '"$OB_MPI_REPO"'/io500; \
-			. io500.sh config-custom.ini)' \
-				> /dev/null 2>&1
+		  mpi_setup_script="$OB_MPI_REPO"/setvars_vanilla.sh
 	fi
+
+	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+	  '(. '"$mpi_setup_script"'; \
+	     cd '"$OB_MPI_REPO"'/io500; \
+		. '"$OB_IO500_CONFIG"'/io500.sh \
+			'"$OB_IO500_CONFIG"'/config-custom.ini)' \
+				> /dev/null 2>&1
 	if [ "$?" -gt "0" ]
 	then
 		echo "io500 failed to run on :""$OB_HOST"":."
