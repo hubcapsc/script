@@ -5,7 +5,7 @@
 # function to call on normal exit and on any failure
 ob_cleanup()
 {
-	echo " clean up test instances"
+	echo "remember to clean up test instances"
 	exit
 }
 
@@ -18,12 +18,18 @@ gcloud config set compute/zone "$OB_ZONE"
 gcloud config set project "$OB_PROJECT"
 
 #OB_MPI_TYPE="intel"
-OB_MPI_TYPE="openmpi"
-#OB_MPI_TYPE="vanilla"
+#OB_MPI_TYPE="openmpi"
+OB_MPI_TYPE="vanilla"
 
 # "slots=N" affects the number of processors to use per client
 OB_SLOTS=0
 #OB_SLOTS=1
+
+# affects memory usage on the ofs servers... default is 512MB
+OB_DBMAXSIZE=536870912
+
+# If set, we'll run io500 after everything is set up, else just exit. 
+OB_RUN_IO500=0
 
 # destination location for io500 config files
 OB_IO500_CONFIG="/var/tmp"
@@ -47,8 +53,8 @@ OB_OFS_MACHINE=" --machine-type=n1-standard-1"
 #OB_OFS_MACHINE=" --machine-type=n2-standard-80"
 
 OB_IO500_CLIENTS=2
-#OB_IO500_MACHINE=" --machine-type=n1-standard-1"
-OB_IO500_MACHINE=" --machine-type=n1-standard-16"
+OB_IO500_MACHINE=" --machine-type=n1-standard-1"
+#OB_IO500_MACHINE=" --machine-type=n1-standard-16"
 
 # MAX per instance: 24 local SSD partitions - 9 TB - 2.4 million read IOPS
 # My observation is that nvme device names will be /dev/nvme0n1 - /dev/nvme0n24
@@ -127,7 +133,9 @@ do
 	OB_OFS_CONFIG="$OB_OFS_CONFIG"`echo -n $i`","
 done
 # chop off the trailing comma and finish building the command
-OB_OFS_CONFIG=`echo ${OB_OFS_CONFIG%?}`" --quiet ""$OB_OFS_CONFIG_FILE_NAME"
+OB_OFS_CONFIG=`echo ${OB_OFS_CONFIG%?}`" --filesystem-dbmaxsize ""$OB_DBMAXSIZE"
+OB_OFS_CONFIG="$OB_OFS_CONFIG"" --quiet ""$OB_OFS_CONFIG_FILE_NAME"
+echo ":""$OB_OFS_CONFIG"":"
 
 eval "$OB_OFS_CONFIG"
 sed -i -n '/ServerOptions/q;p' "$OB_OFS_CONFIG_FILE_NAME"
@@ -633,7 +641,7 @@ done
 echo " done."
 
 # run io500 on the "a" io500 client.
-if [ "$OB_IO500_CLIENTS" -gt "0" ]
+if [ "$OB_IO500_CLIENTS" -gt "0" ] && [ "$OB_RUN_IO500" -gt "0" ]
 then
         OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""a"]}"
         OB_HOST="$OB_IO500_NAME""a"
@@ -661,6 +669,8 @@ then
 		echo "io500 failed to run on :""$OB_HOST"":."
 		ob_cleanup
 	fi
+else
+	echo "everything should be set up, you'll have to run io500 manually"
 fi
 
 echo
