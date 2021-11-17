@@ -661,9 +661,11 @@ then
 	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
 	  '(. '"$mpi_setup_script"'; \
 	     cd '"$OB_MPI_REPO"'/io500; \
-		. '"$OB_IO500_CONFIG"'/io500.sh \
-			'"$OB_IO500_CONFIG"'/config-custom.ini)' \
-				> /dev/null 2>&1
+		chmod 764 '"$OB_IO500_CONFIG"'/io500.sh; \
+			'"$OB_IO500_CONFIG"'/io500.sh \
+				'"$OB_IO500_CONFIG"'/config-custom.ini)' \
+					> /dev/null 2>&1
+
 	if [ "$?" -gt "0" ]
 	then
 		echo "io500 failed to run on :""$OB_HOST"":."
