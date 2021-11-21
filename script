@@ -29,7 +29,7 @@ OB_SLOTS=0
 OB_DBMAXSIZE=536870912
 
 # If set, we'll run io500 after everything is set up, else just exit. 
-OB_RUN_IO500=0
+OB_RUN_IO500=1
 
 # destination location for io500 config files
 OB_IO500_CONFIG="/var/tmp"
@@ -48,21 +48,24 @@ OB_OFS_NAME="pattern-ofs-"
 OB_IO500_NAME="pattern-io500-"
 
 # total number of servers and clients to create
-OB_OFS_SERVERS=1
+OB_OFS_SERVERS=3
+OB_OFS_PORT=3334
+OB_OFS_PER_INSTANCE=3
 OB_OFS_MACHINE=" --machine-type=n1-standard-1"
 #OB_OFS_MACHINE=" --machine-type=n2-standard-80"
 
-OB_IO500_CLIENTS=2
+OB_IO500_CLIENTS=3
 OB_IO500_MACHINE=" --machine-type=n1-standard-1"
 #OB_IO500_MACHINE=" --machine-type=n1-standard-16"
 
 # MAX per instance: 24 local SSD partitions - 9 TB - 2.4 million read IOPS
 # My observation is that nvme device names will be /dev/nvme0n1 - /dev/nvme0n24
 # valid number of ssd drives per instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 24]
-OB_SSD_NUM=1
+OB_SSD_NUM=6
 OB_SSD_ARG=" --local-ssd interface=nvme"
 OB_SSD_DEV="/dev/nvme0n"
 OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
+OB_MOUNT_POINT="/var/lib/orangefs"
 
 OB_NET_INT=""
 #OB_NET_INT=" --network-interface=nic-type=GVNIC"
@@ -97,6 +100,28 @@ then
 	ob_cleanup
 fi
 
+# create array of port numbers, one for each server.
+current_port="$OB_OFS_PORT"
+for i in `seq $OB_OFS_PER_INSTANCE`
+do
+	port[i]="$current_port"
+	current_port=$(( current_port + 1 ))
+done
+
+if [ "$OB_SSD_NUM" -lt "1" ]
+then
+	echo "must have at least one SSD."
+	ob_cleanup
+fi
+
+if [ "$OB_SSD_NUM" -lt "$OB_OFS_PER_INSTANCE" ]
+then
+	echo "need at least one SSD for each pvfs2-server process."
+	echo "OB_SSD_NUM:""$OB_SSD_NUM"":"
+	echo "OB_OFS_PER_INSTANCE:""$OB_OFS_PER_INSTANCE"":"
+	ob_cleanup
+fi
+
 # indexed array of alphabet letters to append to host names for differentiation
 OB_ALPHA=( {0,{a..z},{A..Z}} )
 OB_MAX=52
@@ -107,18 +132,21 @@ OB_MAX=52
 #  --metaspec one:3334,two:3334 --quiet pvfs.conf
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	if [ "$OB_OFS_DATA" -gt "0" ]
-	then
-		OB_DATA_ARRAY+=("$OB_OFS_NAME""${OB_ALPHA[i]}"":3334")
-		OB_OFS_DATA=$(( OB_OFS_DATA - 1 ))
-	elif [ "$OB_OFS_META" -gt "0" ]
-	then
-		OB_META_ARRAY+=("$OB_OFS_NAME""${OB_ALPHA[i]}"":3334")
-		OB_OFS_META=$(( OB_OFS_META - 1 ))
-	else
-		OB_DATA_ARRAY+=("$OB_OFS_NAME""${OB_ALPHA[i]}"":3334")
-		OB_META_ARRAY+=("$OB_OFS_NAME""${OB_ALPHA[i]}"":3334")
-	fi
+	for j in `seq 1 $OB_OFS_PER_INSTANCE`
+	do
+		if [ "$OB_OFS_DATA" -gt "0" ]
+		then
+			OB_DATA_ARRAY+=($OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]})
+			OB_OFS_DATA=$(( OB_OFS_DATA - 1 ))
+		elif [ "$OB_OFS_META" -gt "0" ]
+		then
+			OB_META_ARRAY+=($OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]})
+			OB_OFS_META=$(( OB_OFS_META - 1 ))
+		else
+			OB_DATA_ARRAY+=($OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]})
+			OB_META_ARRAY+=($OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]})
+		fi
+	done
 done
 
 # add the list of data servers to the pvfs2-genconfig command
@@ -138,8 +166,9 @@ OB_OFS_CONFIG="$OB_OFS_CONFIG"" --quiet ""$OB_OFS_CONFIG_FILE_NAME"
 echo ":""$OB_OFS_CONFIG"":"
 
 eval "$OB_OFS_CONFIG"
-sed -i -n '/ServerOptions/q;p' "$OB_OFS_CONFIG_FILE_NAME"
-sed -i 's/_tcp....//g' "$OB_OFS_CONFIG_FILE_NAME"
+# simplify the autogened config file...
+#sed -i -n '/ServerOptions/q;p' "$OB_OFS_CONFIG_FILE_NAME"
+#sed -i 's/_tcp....//g' "$OB_OFS_CONFIG_FILE_NAME"
 
 # associative array for host names to ip addrs
 declare -A OB_EX_ETC_HOSTS # external addrs
@@ -249,93 +278,126 @@ done
 echo " done."
 
 # One SSD per orangefs server.
-if [ "$OB_SSD_NUM" -eq "1" ]
-then
-	OB_LABEL="parted /dev/nvme0n1 --script mklabel gpt"
-	OB_PARTITION="parted -a optimal /dev/nvme0n1 --script mkpart "
-	OB_PARTITION="$OB_PARTITION""primary ext4 2048 375GB"
-	OB_MKFS="mkfs.ext4 -F /dev/nvme0n1p1"
-	OB_MOUNT="mount /dev/nvme0n1p1 /var/lib/orangefs"
-	for i in `seq 1 $OB_OFS_SERVERS`
-	do
-		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-		OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
-		echo "mount single SSD on ""$OB_HOST"
-
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
-			\'"$OB_LABEL"\' > /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo "SSD labeling failed for ""$OB_HOST"
-			ob_cleanup
-		fi
-
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
-			\'"$OB_PARTITION"\' > /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo "SSD partitioning failed for ""$OB_HOST"
-			ob_cleanup
-		fi
-
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
-			\'"$OB_MKFS"\' > /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo "SSD mkfs failed for ""$OB_HOST"
-			ob_cleanup
-		fi
-
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
-			\'"$OB_MOUNT"\' > /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo "SSD mount failed for ""$OB_HOST"
-			ob_cleanup
-		fi
-		echo "single SSD mounted on ""$OB_HOST"
-	done
-fi
-
-# More than one SSD per orangefs server.
-if [ "$OB_SSD_NUM" -gt "1" ]
+if [ $(( OB_SSD_NUM / OB_OFS_PER_INSTANCE )) -eq "1" ]
 then
 	for i in `seq 1 $OB_OFS_SERVERS`
 	do
 		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
 		OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
-		echo "mount RAID filesystem for ""$OB_HOST"
-		OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
-		OB_MDADM="$OB_MDADM""$OB_SSD_NUM"
-
-		for j in `seq 1 $OB_SSD_NUM`
+		for j in `seq 1 $OB_OFS_PER_INSTANCE`
 		do
-			OB_MDADM="$OB_MDADM"" $OB_SSD_DEV""$j"
+			OB_LABEL="parted /dev/nvme0n"$j" --script mklabel gpt"
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+				sudo sh -c \'"$OB_LABEL"\' > /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "labeling failed "$OB_HOST" "$j
+				ob_cleanup
+			fi
+
+			OB_PARTITION="parted -a optimal /dev/nvme0n"$j
+			OB_PARTITION=$OB_PARTITION" --script mkpart"
+			OB_PARTITION=$OB_PARTITION" primary ext4 2048 375GB"
+			
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+				sudo sh -c \'"$OB_PARTITION"\' > /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "Partitioning failed "$OB_HOST" "$j
+				ob_cleanup
+			fi
+
+			OB_MKFS="mkfs.ext4 -F /dev/nvme0n"$j"p1"
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+				sudo sh -c \'"$OB_MKFS"\' > /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "mkfs failed "$OB_HOST" "$j
+				ob_cleanup
+			fi
+
+			mount_point="$OB_MOUNT_POINT""${port[$j]}"
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+			sudo sh -c \'mkdir --mode=777 "$mount_point"\' \
+					> /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "mkdir mount point "$OB_HOST" "$j
+				ob_cleanup
+			fi
+
+			OB_MOUNT="mount /dev/nvme0n"$j"p1 ""$mount_point"
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+				sudo sh -c \'"$OB_MOUNT"\' > /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "mount failed "$OB_HOST" "$j
+				ob_cleanup
+			fi
+			echo "SSD #"$j" mounted on "$OB_HOST
 		done
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
-			\'"$OB_MDADM"\' > /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo "mdadm failed for ""$OB_HOST"
-			ob_cleanup
-		fi
+	done
+else
+	# More than one SSD per orangefs server.
+	for i in `seq 1 $OB_OFS_SERVERS`
+	do
+		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
+		OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
 
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
-			\'mkfs.ext4 -F /dev/md0\' > /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo "mkfs failed for ""$OB_HOST"
-			ob_cleanup
-		fi
+		ssd_per_ofs=$(( OB_SSD_NUM / OB_OFS_PER_INSTANCE))
+		ssd_start=1
+		ssd_end=$ssd_per_ofs
+		for j in `seq 1 $OB_OFS_PER_INSTANCE`
+		do
 
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo sh -c \
-			\'mount /dev/md0 /var/lib/orangefs\' > /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo "mount failed for ""$OB_HOST"
-			ob_cleanup
-		fi
-		echo "RAID mounted on ""$OB_HOST"
+			echo "mount md"$j" on "$OB_HOST
+			OB_MDADM="mdadm --create /dev/md"$j
+			OB_MDADM="$OB_MDADM"" --level=0 --raid-devices="
+			OB_MDADM="$OB_MDADM""$ssd_per_ofs"
+
+			for k in `seq $ssd_start $ssd_end`
+			do
+				OB_MDADM="$OB_MDADM"" $OB_SSD_DEV""$k"
+			done
+			ssd_start=$(( ssd_start + ssd_per_ofs ))
+			ssd_end=$(( ssd_end + ssd_per_ofs ))
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+				sudo sh -c \'"$OB_MDADM"\' > /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "mdadm failed for "$OB_HOST" "$ssd_start
+				ob_cleanup
+			fi
+
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
+				sh -c \'mkfs.ext4 -F /dev/md"$j"\' \
+					> /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "mkfs failed for "$OB_HOST" "$j
+				ob_cleanup
+			fi
+
+			mount_point="$OB_MOUNT_POINT""${port[$j]}"
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+				sudo sh -c \'mkdir "$mount_point"\' \
+					> /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "mkdir mount point "$OB_HOST" "$j
+				ob_cleanup
+			fi
+
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
+				sh -c \'mount /dev/md"$j" \
+					 "$mount_point"\' > /dev/null 2>&1
+			if [ "$?" -gt "0" ]
+			then
+				echo "mount failed "$OB_HOST" "$j
+				ob_cleanup
+			fi
+			echo "RAID mounted on "$OB_HOST" "$j
+		done
 	done
 fi
 
@@ -344,37 +406,73 @@ for i in `seq 1 $OB_OFS_SERVERS`
 do
 	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
 	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
-	scp -o "StrictHostKeyChecking no" \
-		"$OB_OFS_CONFIG_FILE_NAME" "$OB_EX_IP": > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nscp ofs config to :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo cp "$OB_OFS_CONFIG_FILE_NAME" /etc > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\ncp ofs config to /etc/ on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo pvfs2-server /etc/"$OB_OFS_CONFIG_FILE_NAME" -f \
-			> /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nofs storage creation on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo pvfs2-server /etc/"$OB_OFS_CONFIG_FILE_NAME" \
-			> /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nofs server on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	echo -n "."
+	for j in `seq 1 $OB_OFS_PER_INSTANCE`
+	do
+		# deduce my whacky alias from the autogenned conf file.
+		me=`grep "^	Alias " "$OB_OFS_CONFIG_FILE_NAME" | \
+			grep $OB_HOST | \
+			sed $j'q;d' | \
+			awk '{ print $2 }'`
+		# vague sanity check...
+		if [ `grep Alias "$OB_OFS_CONFIG_FILE_NAME" | \
+			grep "$me" | \
+			wc -l` -ne "1" ]
+		then
+			echo -e "\nI don't know who I am :"$me":"
+			ob_cleanup
+		fi
+		mount_point="$OB_MOUNT_POINT""${port[$j]}"
+		datastorage=$mount_point/data
+		metastorage=$mount_point/meta
+
+		# change the DataStorageSpace and MetadataStorageSpace
+		# designations to coincide with where we mounted the SSD
+		# drives.
+		escape_slashes=$(echo $datastorage | sed 's/\//\\\//g')
+		sed -i 's/D.*'$OB_HOST'.*'${port[$j]}'/DataStorageSpace '$escape_slashes'/' orangefs.conf
+		if [ "$?" -gt "0" ]
+		then
+			echo -e "\ncan't edit data storage :"$OB_HOST":"$j":"
+			ob_cleanup
+		fi
+		escape_slashes=$(echo $metastorage | sed 's/\//\\\//g')
+		sed -i 's/M.*'$OB_HOST'.*'${port[$j]}'/MetadataStorageSpace '$escape_slashes'/' orangefs.conf
+		if [ "$?" -gt "0" ]
+		then
+			echo -e "\ncan't edit meta storage :"$OB_HOST":"$j":"
+			ob_cleanup
+		fi
+
+		# copy over the config file.
+		scp -o "StrictHostKeyChecking no" "$OB_OFS_CONFIG_FILE_NAME" \
+			"$OB_EX_IP": > /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo -e "\nscp ofs config to :"$OB_HOST": failed."
+			ob_cleanup
+		fi
+
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
+			pvfs2-server "$OB_OFS_CONFIG_FILE_NAME" -f \
+				-a "$me" \
+					> /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo -e "\nstorage failed on :"$OB_HOST":"$j":"
+			ob_cleanup
+		fi
+
+		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
+			pvfs2-server "$OB_OFS_CONFIG_FILE_NAME" \
+				-a "$me" \
+					> /dev/null 2>&1
+		if [ "$?" -gt "0" ]
+		then
+			echo -e "\nofs server on :"$OB_HOST":""$j"" failed."
+			ob_cleanup
+		fi
+		echo -n "."
+	done
 done
 echo " done."
 echo
@@ -489,7 +587,7 @@ do
 done
 echo " done."
 
-echo -n "mount the orangefs filesystems on the io500 clients. "
+echo -n "mount the orangefs filesystem on the io500 clients. "
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
 	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
