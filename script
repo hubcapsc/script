@@ -29,7 +29,7 @@ OB_SLOTS=0
 OB_DBMAXSIZE=536870912
 
 # If set, we'll run io500 after everything is set up, else just exit. 
-OB_RUN_IO500=1
+OB_RUN_IO500=0
 
 # destination location for io500 config files
 OB_IO500_CONFIG="/var/tmp"
@@ -48,20 +48,21 @@ OB_OFS_NAME="pattern-ofs-"
 OB_IO500_NAME="pattern-io500-"
 
 # total number of servers and clients to create
-OB_OFS_SERVERS=3
+OB_OFS_SERVERS=2
 OB_OFS_PORT=3334
-OB_OFS_PER_INSTANCE=3
+OB_OFS_PER_INSTANCE=4
+OB_SEPARATE_DATA_META=1
 OB_OFS_MACHINE=" --machine-type=n1-standard-1"
 #OB_OFS_MACHINE=" --machine-type=n2-standard-80"
 
-OB_IO500_CLIENTS=3
+OB_IO500_CLIENTS=1
 OB_IO500_MACHINE=" --machine-type=n1-standard-1"
 #OB_IO500_MACHINE=" --machine-type=n1-standard-16"
 
 # MAX per instance: 24 local SSD partitions - 9 TB - 2.4 million read IOPS
 # My observation is that nvme device names will be /dev/nvme0n1 - /dev/nvme0n24
 # valid number of ssd drives per instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 24]
-OB_SSD_NUM=6
+OB_SSD_NUM=8
 OB_SSD_ARG=" --local-ssd interface=nvme"
 OB_SSD_DEV="/dev/nvme0n"
 OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
@@ -119,6 +120,14 @@ then
 	echo "need at least one SSD for each pvfs2-server process."
 	echo "OB_SSD_NUM:""$OB_SSD_NUM"":"
 	echo "OB_OFS_PER_INSTANCE:""$OB_OFS_PER_INSTANCE"":"
+	ob_cleanup
+fi
+
+if [ "$OB_SSD_NUM" -lt $(( OB_OFS_PER_INSTANCE * 2 )) -a \
+	"$OB_SEPARATE_DATA_META" -eq "1" ]
+then
+	echo "need at least two SSDs per pvfs2-server process to"
+	echo "keep IO and metadata separate."
 	ob_cleanup
 fi
 
@@ -277,14 +286,17 @@ do
 done
 echo " done."
 
-# One SSD per orangefs server.
-if [ $(( OB_SSD_NUM / OB_OFS_PER_INSTANCE )) -eq "1" ]
+# One SSD per pvfs2-server process or two SSDs per process if separate
+# IO and metadata.
+if [ $(( OB_SSD_NUM / OB_OFS_PER_INSTANCE )) -eq "1" ] ||
+	[ $(( OB_SSD_NUM / OB_OFS_PER_INSTANCE )) -eq "2" -a \
+		"$OB_SEPARATE_DATA_META" -eq "1" ]
 then
 	for i in `seq 1 $OB_OFS_SERVERS`
 	do
 		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
 		OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
-		for j in `seq 1 $OB_OFS_PER_INSTANCE`
+		for j in `seq 1 $OB_SSD_NUM`
 		do
 			OB_LABEL="parted /dev/nvme0n"$j" --script mklabel gpt"
 			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
@@ -316,9 +328,23 @@ then
 				ob_cleanup
 			fi
 
-			mount_point="$OB_MOUNT_POINT""${port[$j]}"
+			if [ "$OB_SEPARATE_DATA_META" -eq "1" ]
+			then
+				if [ $(( j % 2 )) -eq 0 ]
+				then
+					index=$(( j / 2 ))
+					mount_point="$OB_MOUNT_POINT""${port[$index]}"
+					mount_point="$mount_point""/meta"
+				else
+					index=$((( j + 1) / 2 ))
+					mount_point="$OB_MOUNT_POINT""${port[$index]}"
+					mount_point="$mount_point""/data"
+				fi
+			else
+				mount_point="$OB_MOUNT_POINT""${port[$j]}"
+			fi
 			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-			sudo sh -c \'mkdir --mode=777 "$mount_point"\' \
+			sudo sh -c \'mkdir -m 777 -p "$mount_point"\' \
 					> /dev/null 2>&1
 			if [ "$?" -gt "0" ]
 			then
