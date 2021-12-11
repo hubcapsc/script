@@ -48,14 +48,14 @@ OB_OFS_NAME="pattern-ofs-"
 OB_IO500_NAME="pattern-io500-"
 
 # total number of servers and clients to create
-OB_OFS_SERVERS=2
+OB_OFS_SERVERS=1
 OB_OFS_PORT=3334
 OB_OFS_PER_INSTANCE=4
 OB_SEPARATE_DATA_META=1
 OB_OFS_MACHINE=" --machine-type=n1-standard-1"
 #OB_OFS_MACHINE=" --machine-type=n2-standard-80"
 
-OB_IO500_CLIENTS=1
+OB_IO500_CLIENTS=0
 OB_IO500_MACHINE=" --machine-type=n1-standard-1"
 #OB_IO500_MACHINE=" --machine-type=n1-standard-16"
 
@@ -76,8 +76,8 @@ OB_NET_PERF=""
 
 # Here we can configure some servers to be data only, some to be meta only,
 # and the rest will be both.
-OB_OFS_DATA=0		# number of ofs data-only servers 
-OB_OFS_META=0		# number of ofs meta-only servers
+OB_OFS_DATA=1		# number of ofs data-only servers 
+OB_OFS_META=1		# number of ofs meta-only servers
 
 OB_OFS_CONFIG="pvfs2-genconfig --iospec "
 OB_OFS_CONFIG_FILE_NAME="orangefs.conf"
@@ -95,9 +95,10 @@ OB_SLEEP=5
 
 OB_CREATE="gcloud compute instances create "
 
-if (( "$OB_OFS_DATA"+"$OB_OFS_META">"$OB_OFS_SERVERS" ))
+if [ $(( OB_OFS_DATA + OB_OFS_META )) -gt \
+	$(( OB_OFS_SERVERS * OB_OFS_PER_INSTANCE )) ]
 then
-	echo "sum of pure data + pure meta must not exceed total server number."
+	echo "sum of pure data + pure meta must not exceed pvfs2-server number."
 	ob_cleanup
 fi
 
