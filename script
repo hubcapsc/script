@@ -41,28 +41,28 @@ OB_IMAGE=" --image hubcap-io500-oiv1"
 
 OB_SCOPE=" --scopes=cloud-platform"
 
-# persistant place for results and configs and whatever.
+# persistent place for results and configs and whatever.
 OB_BUCKET="gs://hubcap_bucket"
 
 OB_OFS_NAME="pattern-ofs-"
 OB_IO500_NAME="pattern-io500-"
 
 # total number of servers and clients to create
-OB_OFS_SERVERS=1
+OB_OFS_SERVERS=2
 OB_OFS_PORT=3334
-OB_OFS_PER_INSTANCE=4
+OB_OFS_PER_INSTANCE=2
 OB_SEPARATE_DATA_META=1
 OB_OFS_MACHINE=" --machine-type=n1-standard-1"
 #OB_OFS_MACHINE=" --machine-type=n2-standard-80"
 
-OB_IO500_CLIENTS=0
+OB_IO500_CLIENTS=1
 OB_IO500_MACHINE=" --machine-type=n1-standard-1"
 #OB_IO500_MACHINE=" --machine-type=n1-standard-16"
 
 # MAX per instance: 24 local SSD partitions - 9 TB - 2.4 million read IOPS
 # My observation is that nvme device names will be /dev/nvme0n1 - /dev/nvme0n24
 # valid number of ssd drives per instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 24]
-OB_SSD_NUM=8
+OB_SSD_NUM=4
 OB_SSD_ARG=" --local-ssd interface=nvme"
 OB_SSD_DEV="/dev/nvme0n"
 OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
@@ -75,9 +75,80 @@ OB_NET_PERF=""
 
 
 # Here we can configure some servers to be data only, some to be meta only,
-# and the rest will be both.
+# and the rest will be both. These are used only when generating
+# a balanced layout and overridden when the script runner supplies a
+# layout.
 OB_OFS_DATA=1		# number of ofs data-only servers 
 OB_OFS_META=1		# number of ofs meta-only servers
+
+# layout data structure. The first example is "unset" since the first element
+# is zero. In the second example, the first row represents
+# instance_a and the second row represents instance_b. There are four
+# pvfs2-server processes on each instance. a:3334 is both data and meta,
+# a:3335 is both, a:3336 is data only and a:3337 is both. b:3334-3336
+# is both and b:3337 is meta only. When the layout data structure is
+# "unset" the script generates a "balanced" one.
+OB_LAYOUT=( 0 )
+#OB_LAYOUT=( 1 \
+#b b d b \
+#b b b m \
+#)
+# Generate a balanced layout if the script runner doesn't supply a layout.
+if [ "${OB_LAYOUT[0]}" -eq "0" ]
+then
+	# figure out the maximum number of data and/or meta only servers
+	# that can be deployed per instance in a balanced layout.
+	#
+	# On the Internet it says:
+	# To do rounding up ... simply add (denom-1) to the numerator.
+	#
+	data_max=$((( OB_OFS_DATA + ( OB_OFS_SERVERS - 1 )) / OB_OFS_SERVERS ))
+	meta_max=$((( OB_OFS_META + ( OB_OFS_SERVERS - 1 )) / OB_OFS_SERVERS ))
+	
+	data=$OB_OFS_DATA
+	meta=$OB_OFS_META
+	unset OB_LAYOUT
+	OB_LAYOUT[0]="1"
+	row=1
+	for i in `seq 1 $OB_OFS_SERVERS`
+	do
+		data_this_server=0
+		meta_this_server=0
+		for j in `seq 1 $OB_OFS_PER_INSTANCE`
+        	do
+			if [ "$data" -gt "0" -a \
+				"$data_this_server" -lt "$data_max" ]
+			then
+				OB_LAYOUT[$(( row + j - 1 ))]=d
+				data_this_server=$(( data_this_server + 1 ))
+				data=$(( data - 1 ))
+			elif [ "$meta" -gt "0" -a \
+				"$meta_this_server" -lt "$meta_max" ]
+			then
+				OB_LAYOUT[$(( row + j - 1 ))]=m
+				meta_this_server=$(( meta_this_server + 1 ))
+				meta=$(( meta - 1 ))
+			else
+				OB_LAYOUT[$(( row +  j - 1 ))]=b
+			fi
+		done
+		row=$((( row * j ) + 1 ))
+	done
+fi
+
+	echo "layout:""${OB_LAYOUT[@]}"":"
+
+# sanity check: we should now have a layout data structure populated
+# with the same number of elements as we have pvfs2-server processes,
+# plus one for the set/unset cookie.
+if [ "${#OB_LAYOUT[@]}" -ne \
+		 "$((( OB_OFS_SERVERS * OB_OFS_PER_INSTANCE ) + 1 ))" ]
+then
+	echo "layout:""${OB_LAYOUT[@]}"":"
+	echo "OB_OFS_SERVERS:""$OB_OFS_SERVERS"":"
+	echo "OB_OFS_PER_INSTANCE:""$OB_OFS_PER_INSTANCE"":"
+	exit
+fi
 
 OB_OFS_CONFIG="pvfs2-genconfig --iospec "
 OB_OFS_CONFIG_FILE_NAME="orangefs.conf"
@@ -140,23 +211,24 @@ OB_MAX=52
 # a pvfs2-genconfig command, which will end up looking something like this:
 # pvfs2-genconfig --iospec one:3334,two:3334,three:3334,four:3334 \
 #  --metaspec one:3334,two:3334 --quiet pvfs.conf
+row=1
 for i in `seq 1 $OB_OFS_SERVERS`
 do
 	for j in `seq 1 $OB_OFS_PER_INSTANCE`
 	do
-		if [ "$OB_OFS_DATA" -gt "0" ]
-		then
-			OB_DATA_ARRAY+=($OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]})
-			OB_OFS_DATA=$(( OB_OFS_DATA - 1 ))
-		elif [ "$OB_OFS_META" -gt "0" ]
-		then
-			OB_META_ARRAY+=($OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]})
-			OB_OFS_META=$(( OB_OFS_META - 1 ))
-		else
-			OB_DATA_ARRAY+=($OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]})
-			OB_META_ARRAY+=($OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]})
-		fi
+		this_pvfs2_server=$OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]}
+		case ${OB_LAYOUT[$(( row +  j - 1 ))]} in
+			b) OB_DATA_ARRAY+=($this_pvfs2_server)
+			   OB_META_ARRAY+=($this_pvfs2_server);;
+			m) OB_META_ARRAY+=($this_pvfs2_server);;
+			d) OB_DATA_ARRAY+=($this_pvfs2_server);;
+			*) echo "ERROR"
+			   echo "server "$i" instance "$j
+			   echo ${OB_LAYOUT[$(( row +  j - 1 ))]}
+			   ob_cleanup;;
+		esac
 	done
+	row=$((( row * j ) + 1 ))
 done
 
 # add the list of data servers to the pvfs2-genconfig command
@@ -176,7 +248,7 @@ OB_OFS_CONFIG="$OB_OFS_CONFIG"" --quiet ""$OB_OFS_CONFIG_FILE_NAME"
 echo ":""$OB_OFS_CONFIG"":"
 
 eval "$OB_OFS_CONFIG"
-# simplify the autogened config file...
+# simplify the autogenned config file...
 #sed -i -n '/ServerOptions/q;p' "$OB_OFS_CONFIG_FILE_NAME"
 #sed -i 's/_tcp....//g' "$OB_OFS_CONFIG_FILE_NAME"
 
@@ -252,7 +324,7 @@ do
 done
 echo " done."
 
-echo -n "add ofs server internal IP addrs to each servers's host file. "
+echo -n "add ofs server internal IP addrs to each server's host file. "
 # make a local file of host lines to add to all the cloud servers.
 for i in `seq 1 $OB_OFS_SERVERS`
 do
