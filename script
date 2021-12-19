@@ -28,6 +28,19 @@ OB_SLOTS=0
 # affects memory usage on the ofs servers... default is 512MB
 OB_DBMAXSIZE=536870912
 
+# There's an IO buffer shared between the kernel module and the client core.
+# There's the concept of a stripe-type and stripe-size that determines
+# how, and how much, data is placed in the buffer and also how the
+# data is distributed across the various disks in the backing store.
+#
+OB_DIST_NAME=simple_stripe
+#OB_DIST_NAME=basic_dist
+#OB_DIST_NAME=varstrip_dist
+#OB_DIST_NAME=twod_stripe
+#OB_DIST_PARAMS=strip_size:65536
+#OB_DIST_PARAMS=strip_size:131072
+OB_DIST_PARAMS=strip_size:1048576
+
 # If set, we'll run io500 after everything is set up, else just exit. 
 OB_RUN_IO500=0
 
@@ -44,14 +57,14 @@ OB_SCOPE=" --scopes=cloud-platform"
 # persistent place for results and configs and whatever.
 OB_BUCKET="gs://hubcap_bucket"
 
-OB_OFS_NAME="pattern-ofs-"
-OB_IO500_NAME="pattern-io500-"
+OB_OFS_NAME="pattern3-ofs-"
+OB_IO500_NAME="pattern3-io500-"
 
 # total number of servers and clients to create
 OB_OFS_SERVERS=2
 OB_OFS_PORT=3334
-OB_OFS_PER_INSTANCE=2
-OB_SEPARATE_DATA_META=1
+OB_OFS_PER_INSTANCE=1
+OB_SEPARATE_DATA_META=0
 OB_OFS_MACHINE=" --machine-type=n1-standard-1"
 #OB_OFS_MACHINE=" --machine-type=n2-standard-80"
 
@@ -78,8 +91,8 @@ OB_NET_PERF=""
 # and the rest will be both. These are used only when generating
 # a balanced layout and overridden when the script runner supplies a
 # layout.
-OB_OFS_DATA=1		# number of ofs data-only servers 
-OB_OFS_META=1		# number of ofs meta-only servers
+OB_OFS_DATA=0		# number of ofs data-only servers 
+OB_OFS_META=0		# number of ofs meta-only servers
 
 # layout data structure. The first example is "unset" since the first element
 # is zero. In the second example, the first row represents
@@ -244,6 +257,8 @@ do
 done
 # chop off the trailing comma and finish building the command
 OB_OFS_CONFIG=`echo ${OB_OFS_CONFIG%?}`" --filesystem-dbmaxsize ""$OB_DBMAXSIZE"
+OB_OFS_CONFIG="$OB_OFS_CONFIG"" --dist-name ""$OB_DIST_NAME"
+OB_OFS_CONFIG="$OB_OFS_CONFIG"" --dist-params=""$OB_DIST_PARAMS"
 OB_OFS_CONFIG="$OB_OFS_CONFIG"" --quiet ""$OB_OFS_CONFIG_FILE_NAME"
 echo ":""$OB_OFS_CONFIG"":"
 
