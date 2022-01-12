@@ -57,13 +57,13 @@ OB_SCOPE=" --scopes=cloud-platform"
 # persistent place for results and configs and whatever.
 OB_BUCKET="gs://hubcap_bucket"
 
-OB_OFS_NAME="pattern3-ofs-"
-OB_IO500_NAME="pattern3-io500-"
+OB_OFS_NAME="pattern1-ofs-"
+OB_IO500_NAME="pattern1-io500-"
 
 # total number of servers and clients to create
 OB_OFS_SERVERS=2
 OB_OFS_PORT=3334
-OB_OFS_PER_INSTANCE=1
+OB_OFS_PER_INSTANCE=4
 OB_SEPARATE_DATA_META=0
 OB_OFS_MACHINE=" --machine-type=n1-standard-1"
 #OB_OFS_MACHINE=" --machine-type=n2-standard-80"
@@ -91,8 +91,8 @@ OB_NET_PERF=""
 # and the rest will be both. These are used only when generating
 # a balanced layout and overridden when the script runner supplies a
 # layout.
-OB_OFS_DATA=0		# number of ofs data-only servers 
-OB_OFS_META=0		# number of ofs meta-only servers
+OB_OFS_DATA=2		# number of ofs data-only servers 
+OB_OFS_META=1		# number of ofs meta-only servers
 
 # layout data structure. The first example is "unset" since the first element
 # is zero. In the second example, the first row represents
@@ -263,9 +263,6 @@ OB_OFS_CONFIG="$OB_OFS_CONFIG"" --quiet ""$OB_OFS_CONFIG_FILE_NAME"
 echo ":""$OB_OFS_CONFIG"":"
 
 eval "$OB_OFS_CONFIG"
-# simplify the autogenned config file...
-#sed -i -n '/ServerOptions/q;p' "$OB_OFS_CONFIG_FILE_NAME"
-#sed -i 's/_tcp....//g' "$OB_OFS_CONFIG_FILE_NAME"
 
 # associative array for host names to ip addrs
 declare -A OB_EX_ETC_HOSTS # external addrs
@@ -515,7 +512,40 @@ else
 	done
 fi
 
-echo -n "start ofs servers. "
+# change the DataStorageSpace and MetadataStorageSpace
+# designations to coincide with where we mounted the SSD
+# drives.
+echo -n "edit config file mount points. "
+for i in `seq 1 $OB_OFS_SERVERS`
+do
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
+	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+	for j in `seq 1 $OB_OFS_PER_INSTANCE`
+	do
+		mount_point="$OB_MOUNT_POINT""${port[$j]}"
+		datastorage=$mount_point/data
+		metastorage=$mount_point/meta
+
+		escape_slashes=$(echo $datastorage | sed 's/\//\\\//g')
+		sed -i 's/D.*'$OB_HOST'.*'${port[$j]}'/DataStorageSpace '$escape_slashes'/' orangefs.conf
+		if [ "$?" -gt "0" ]
+		then
+			echo -e "\ncan't edit data storage :"$OB_HOST":"$j":"
+			ob_cleanup
+		fi
+		escape_slashes=$(echo $metastorage | sed 's/\//\\\//g')
+		sed -i 's/M.*'$OB_HOST'.*'${port[$j]}'/MetadataStorageSpace '$escape_slashes'/' orangefs.conf
+		if [ "$?" -gt "0" ]
+		then
+			echo -e "\ncan't edit meta storage :"$OB_HOST":"$j":"
+			ob_cleanup
+		fi
+	done
+done
+echo " done."
+echo
+
+echo -n "start the servers. "
 for i in `seq 1 $OB_OFS_SERVERS`
 do
 	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
@@ -535,28 +565,6 @@ do
 			echo -e "\nI don't know who I am :"$me":"
 			ob_cleanup
 		fi
-		mount_point="$OB_MOUNT_POINT""${port[$j]}"
-		datastorage=$mount_point/data
-		metastorage=$mount_point/meta
-
-		# change the DataStorageSpace and MetadataStorageSpace
-		# designations to coincide with where we mounted the SSD
-		# drives.
-		escape_slashes=$(echo $datastorage | sed 's/\//\\\//g')
-		sed -i 's/D.*'$OB_HOST'.*'${port[$j]}'/DataStorageSpace '$escape_slashes'/' orangefs.conf
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\ncan't edit data storage :"$OB_HOST":"$j":"
-			ob_cleanup
-		fi
-		escape_slashes=$(echo $metastorage | sed 's/\//\\\//g')
-		sed -i 's/M.*'$OB_HOST'.*'${port[$j]}'/MetadataStorageSpace '$escape_slashes'/' orangefs.conf
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\ncan't edit meta storage :"$OB_HOST":"$j":"
-			ob_cleanup
-		fi
-
 		# copy over the config file.
 		scp -o "StrictHostKeyChecking no" "$OB_OFS_CONFIG_FILE_NAME" \
 			"$OB_EX_IP": > /dev/null 2>&1
