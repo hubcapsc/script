@@ -776,11 +776,26 @@ then
 fi
 if [ "$OB_SLOTS" -gt "0" ]
 then
-	sed -i "s/$/ slots=$OB_SLOTS/" hostfile
-	if [ "$?" -gt "0" ]
+	if [ "$OB_MPI_TYPE" = "intel" ]
 	then
-		echo "adding slots to hostfile failed."
-		ob_cleanup
+		OB_RUN_IO500=0
+		cat <<- SLOTS_MSG
+
+		*********************** WARNING ***********************
+		 Intel MPI does not support "slots" in the hostfile.
+		 Pass the --perhost option to mpirun/mpiexec instead.
+
+		 IO500 will need to be run manually upon completion.
+		*******************************************************
+
+		SLOTS_MSG
+	else
+		sed -i "s/$/ slots=$OB_SLOTS/" hostfile
+		if [ "$?" -gt "0" ]
+		then
+			echo "adding slots to hostfile failed."
+			ob_cleanup
+		fi
 	fi
 fi
 
