@@ -277,6 +277,12 @@ OB_POLICY_PREFIX="pattern1-io500-pg"
 
 if [ "$OB_USE_PLACEMENT_GROUP" -gt "0" ]
 then
+	if [ "$OB_OFS_MACHINE" != "$OB_IO500_MACHINE" ]
+	then
+		echo "server and client machine types must match for a compact placement group."
+		ob_cleanup
+	fi
+
 	ts=$(date "+%Y%m%d-%H%M%S")
 	policy_name="${OB_POLICY_PREFIX}-${ts}"
 	vm_count=$(( OB_OFS_SERVERS + OB_IO500_CLIENTS ))
