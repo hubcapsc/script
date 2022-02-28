@@ -1,3 +1,4 @@
+import argparse
 from enum import Enum
 
 import googleapiclient.discovery
@@ -7,29 +8,114 @@ class OBInstType(Enum):
     CLIENT = 2
 
 class OBOptions:
-    project = "orangefsdev"
-    region = "us-central1"
-    zone = "us-central1-a"
+    def __init__(self, args):
+        self.project = args.project
+        self.region = args.region
+        self.zone = args.zone
+        self.image = f"global/images/{args.image}"
 
-    image_name = "hubcap-io500-oiv1"
-    image_path = f"global/images/{image_name}"
-    scopes = "https://www.googleapis.com/auth/cloud-platform"
-    subnet_name = "io500-central1-sn"
-    subnet_path = f"regions/{region}/subnetworks/{subnet_name}"
-    policy_name = "python-io500-2-pg"
+        self.scopes = []
+        for item in args.scopes:
+            self.scopes.append(f"https://www.googleapis.com/auth/{item}")
 
-    nic_type = "GVNIC"
-    use_tier1_networking = True
+        if args.subnet:
+            self.subnet = f"regions/{args.region}/subnetworks/{args.subnet}"
+        else:
+            self.subnet = None
 
-    server_count = 1
-    client_count = 1
-    server_machine_type = "c2-standard-30"
-    client_machine_type = "c2-standard-30"
-    server_name_prefix = "python-ofs-"
-    client_name_prefix = "python-io500-"
+        self.policy = args.policy
+        self.nic_type = args.nic_type
+        self.enable_tier1_networking = args.enable_tier1_networking
 
-    num_ssds_per_instance = 4
+        self.server = {
+            "count": args.num_servers,
+            "type": args.server_type,
+            "prefix": args.server_prefix,
+            "num_ssd_per": args.num_ssd_per_server
+        }
 
+        self.client = {
+            "count": args.num_clients,
+            "type": args.client_type,
+            "prefix": args.client_prefix
+        }
+
+
+
+def initialize_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+            "-p", "--project",
+            required=True,
+            help="GCP project id")
+    parser.add_argument(
+            "-r", "--region",
+            required=True,
+            help="GCP region to launch instances in")
+    parser.add_argument(
+            "-z", "--zone",
+            required=True,
+            help="GCP zone to launch instances in")
+    parser.add_argument(
+            "-i", "--image",
+            required=True,
+            help="name of source image to create instances from")
+    # TODO: should "scopes" be required?
+    parser.add_argument(
+            "--scopes",
+            required=True,
+            action="append",
+            metavar="SCOPE",
+            help="GCP access scope to be applied to instances")
+    parser.add_argument(
+            "-s", "--subnet",
+            default=None,
+            help="subnetwork to create instances in")
+    parser.add_argument(
+            "--policy",
+            default=None,
+            help="name of resource policy to apply to instances")
+    parser.add_argument(
+            "--nic-type",
+            default=None,
+            help="type of GCP vNIC to be used on generated network interface")
+    parser.add_argument(
+            "--enable-tier1-networking",
+            action="store_true",
+            help="enable TIER_1 networking on instances")
+    parser.add_argument(
+            "--num-servers",
+            required=True,
+            type=int,
+            help="number of servers to create")
+    parser.add_argument(
+            "--num-clients",
+            required=True,
+            type=int,
+            help="number of clients to create")
+    parser.add_argument(
+            "--server-type",
+            required=True,
+            help="machine type to use for server instances")
+    parser.add_argument(
+            "--client-type",
+            required=True,
+            help="machine type to use for client instances")
+    parser.add_argument(
+            "--server-prefix",
+            required=True,
+            help="string to begin all server names with")
+    parser.add_argument(
+            "--client-prefix",
+            required=True,
+            help="string to begin all client names with")
+    parser.add_argument(
+            "--num-ssd-per-server",
+            type=int,
+            default=0,
+            help="number of local SSDs to attach to each server instance")
+
+    return parser
 
 def setup_network_interface(opts):
     network_interface = {
@@ -42,9 +128,8 @@ def setup_network_interface(opts):
         ]
     }
 
-    if opts.subnet_name and opts.region:
-        subnet_path = f"regions/{opts.region}/subnetworks/{opts.subnet_name}"
-        network_interface["subnetwork"] = subnet_path
+    if opts.subnet:
+        network_interface["subnetwork"] = opts.subnet
 
     if opts.nic_type:
         network_interface["nicType"] = opts.nic_type
@@ -56,7 +141,7 @@ def setup_disks(opts, is_server):
         "type": "PERSISTENT",
         "boot": "true",
         "initializeParams": {
-            "sourceImage": opts.image_path
+            "sourceImage": opts.image
         },
         "autoDelete": "true"
     }
@@ -70,7 +155,7 @@ def setup_disks(opts, is_server):
 
     disks = [boot_disk]
 
-    if is_server and opts.num_ssds_per_instance > 0:
+    if is_server and opts.server["num_ssd_per"] > 0:
         local_disk = {
             "type": "SCRATCH",
             "initializeParams": {
@@ -79,7 +164,7 @@ def setup_disks(opts, is_server):
             "autoDelete": "true",
             "interface": "NVME"
         }
-        local_disks = [local_disk] * opts.num_ssds_per_instance
+        local_disks = [local_disk] * opts.server["num_ssd_per"]
         disks += local_disks
 
     return disks
@@ -90,24 +175,25 @@ def setup_instance_properties(opts, is_server, net_int, disks):
         "disks": disks,
         "serviceAccounts": [
             {
-                "scopes": [opts.scopes]
+                "scopes": opts.scopes
             }
         ]
     }
 
     if is_server:
-        instance_properties["machineType"] = opts.server_machine_type
+        instance_properties["machineType"] = opts.server["type"]
     else:
-        instance_properties["machineType"] = opts.client_machine_type
+        instance_properties["machineType"] = opts.client["type"]
 
-    if opts.policy_name:
-        instance_properties["resourcePolicies"] = [opts.policy_name]
+    if opts.policy:
+        instance_properties["resourcePolicies"] = [opts.policy]
         instance_properties["scheduling"] = {
             "onHostMaintenance": "TERMINATE",
             "automaticRestart": "false"
         }
 
-    if opts.use_tier1_networking:
+    # TODO: check that nic-type is set to "GVNIC"
+    if opts.enable_tier1_networking:
         instance_properties["networkPerformanceConfig"] = {
             "totalEgressBandwidthTier": "TIER_1"
         }
@@ -117,16 +203,18 @@ def setup_instance_properties(opts, is_server, net_int, disks):
 def create_instances(compute, opts, network_interface, inst_type):
     if inst_type == OBInstType.SERVER:
         is_server = True
-        name_pattern = f"{opts.server_name_prefix}#"
+        count = opts.server["count"]
+        name_pattern = f'{opts.server["prefix"]}##'
     else:
         is_server = False
-        name_pattern = f"{opts.client_name_prefix}#"
+        count = opts.client["count"]
+        name_pattern = f'{opts.client["prefix"]}##'
 
     disks = setup_disks(opts, is_server)
     instance_properties = setup_instance_properties(
             opts, is_server, network_interface, disks)
     body = {
-        "count": opts.client_count,
+        "count": count,
         "namePattern": name_pattern,
         "instanceProperties": instance_properties
     }
@@ -136,9 +224,10 @@ def create_instances(compute, opts, network_interface, inst_type):
             zone=opts.zone,
             body=body).execute()
 
-
 if __name__ == "__main__":
-    ob_opts = OBOptions()
+    parser = initialize_parser()
+    args = parser.parse_args()
+    ob_opts = OBOptions(args)
 
     compute = googleapiclient.discovery.build('compute', 'v1')
 
