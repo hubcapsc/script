@@ -84,10 +84,38 @@ OB_MOUNT_POINT="/var/lib/orangefs"
 # If set, will create all instances inside a compact placement group.
 OB_USE_PLACEMENT_GROUP=0
 
-OB_NET_INT=""
-#OB_NET_INT=" --network-interface=nic-type=GVNIC"
-OB_NET_PERF=""
-#OB_NET_PERF=" --network-performance-configs=total-egress-bandwidth-tier=TIER_1"
+# setup network options
+OB_SUBNET="io500-central1-sn"
+OB_NIC_TYPE=""			# empty string or "GVNIC" for now
+OB_USE_TIER1_NET=0		# if 1, must specify "GVNIC" for OB_NIC_TYPE
+
+OB_NET_INT_ARGS=""
+if [ -n "${OB_SUBNET}" ]
+then
+	OB_NET_INT_ARGS="subnet=${OB_SUBNET}"
+fi
+if [ -n "${OB_NIC_TYPE}" ]
+then
+	# add comma if subnet was specified
+	if [ -n "${OB_SUBNET}" ]
+	then
+		OB_NET_INT_ARGS+=","
+	fi
+	OB_NET_INT_ARGS+="nic-type=${OB_NIC_TYPE}"
+fi
+if [ -n "${OB_NET_INT_ARGS}" ]
+then
+	OB_NET_INT=" --network-interface=${OB_NET_INT_ARGS}"
+else
+	OB_NET_INT=""
+fi
+
+if [ "${OB_USE_TIER1_NET}" -gt "0" ]
+then
+	OB_NET_PERF=" --network-performance-configs=total-egress-bandwidth-tier=TIER_1"
+else
+	OB_NET_PERF=""
+fi
 
 
 # Here we can configure some servers to be data only, some to be meta only,
