@@ -62,6 +62,9 @@ OB_BUCKET="gs://hubcap_bucket"
 OB_OFS_NAME="pattern1-ofs-"
 OB_IO500_NAME="pattern1-io500-"
 
+# 0 = use basic gcloud create, 1 = use python bulk api
+OB_USE_BULK_CREATE=1
+
 # total number of servers and clients to create
 OB_OFS_SERVERS=2
 OB_OFS_PORT=3334
@@ -249,14 +252,11 @@ then
 	ob_cleanup
 fi
 
-# temporary variable for testing
-USE_DIGIT=1
-
 # indexed arrays of alphabet letters or numerical digits to append to host
 # names for differentiation
 OB_ALPHA=( {0,{a..z},{A..Z}} )
 OB_DIGIT=( $(seq -w 0 99) )		# -w for equal width, so all two digits
-if [ "$USE_DIGIT" -gt "0" ]
+if [ "$OB_USE_BULK_CREATE" -gt "0" ]
 then
 	# bulk api automatically appends numbers to instance names
 	OB_SUFFIX=( ${OB_DIGIT[@]} )
@@ -328,26 +328,27 @@ then
 	fi
 
 	ts=$(date "+%Y%m%d-%H%M%S")
-	policy_name="${OB_POLICY_PREFIX}-${ts}"
+	OB_POLICY_NAME="${OB_POLICY_PREFIX}-${ts}"
 	vm_count=$(( OB_OFS_SERVERS + OB_IO500_CLIENTS ))
 
-	OB_CMD="$OB_POLICY_CREATE $OB_POLICY_TYPE $policy_name"
+	OB_CMD="$OB_POLICY_CREATE $OB_POLICY_TYPE $OB_POLICY_NAME"
 	OB_CMD+=" --collocation=$OB_COLLOCATION"
 	OB_CMD+=" --vm-count=$vm_count"
 	#echo $OB_CMD
 	eval $OB_CMD
 	if [ "$?" -gt "0" ]
 	then
-		echo "creation of "$policy_name" failed."
+		echo "creation of "$OB_POLICY_NAME" failed."
 		ob_cleanup
 	fi
 
-	OB_POLICY_OPTS=" --resource-policies=$policy_name"
+	OB_POLICY_OPTS=" --resource-policies=$OB_POLICY_NAME"
 	OB_POLICY_OPTS+=" --maintenance-policy=TERMINATE"
 	OB_POLICY_OPTS+=" --no-restart-on-failure"
 
 	# TODO: add cleanup message/instructions for policy to ob_cleanup
 else
+	OB_POLICY_NAME=""
 	OB_POLICY_OPTS=""
 fi
 
@@ -402,9 +403,46 @@ basic_create() {
 	done
 }
 
+# function to create instances using the python bulk api via external script
+bulk_create() {
+	BULK_CREATE_FILENAME="bulk_create.py"
+	OB_CMD="python $BULK_CREATE_FILENAME"
+	OB_CMD+=" --project=$OB_PROJECT --region=$OB_REGION --zone=$OB_ZONE"
+	OB_CMD+=" --image=$OB_IMAGE --scopes=$OB_SCOPE"
+	OB_CMD+=" --num-servers=$OB_OFS_SERVERS --num-clients=$OB_IO500_CLIENTS"
+	OB_CMD+=" --server-type=$OB_OFS_MACHINE --client-type=$OB_IO500_MACHINE"
+	OB_CMD+=" --server-prefix=$OB_OFS_NAME --client-prefix=$OB_IO500_NAME"
+	OB_CMD+=" --num-ssd-per-server=$OB_SSD_NUM"
+
+	if [ -n "${OB_SUBNET}" ]
+	then
+		OB_CMD+=" --subnet=$OB_SUBNET"
+	fi
+	if [ -n "${OB_POLICY_NAME}" ]
+	then
+		OB_CMD+=" --policy=$OB_POLICY_NAME"
+	fi
+	if [ -n "${OB_NIC_TYPE}" ]
+	then
+		OB_CMD+=" --nic-type=$OB_NIC_TYPE"
+	fi
+	if [ "$OB_USE_TIER1_NET" -gt "0" ]
+	then
+		OB_CMD+=" --enable-tier1-networking"
+	fi
+
+	# echo $OB_CMD
+	eval $OB_CMD
+}
+
 # create server and client instances
-basic_create $OB_OFS_SERVERS $TYPE_OFS_SERVER
-basic_create $OB_IO500_CLIENTS $TYPE_IO500_CLIENT
+if [ "$OB_USE_BULK_CREATE" -gt "0" ]
+then
+	bulk_create
+else
+	basic_create $OB_OFS_SERVERS $TYPE_OFS_SERVER
+	basic_create $OB_IO500_CLIENTS $TYPE_IO500_CLIENT
+fi
 
 # function to wait for a launched instance to reach the RUNNING state
 wait_for_instance() {
