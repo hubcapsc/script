@@ -247,9 +247,23 @@ then
 	ob_cleanup
 fi
 
-# indexed array of alphabet letters to append to host names for differentiation
+# temporary variable for testing
+USE_DIGIT=1
+
+# indexed arrays of alphabet letters or numerical digits to append to host
+# names for differentiation
 OB_ALPHA=( {0,{a..z},{A..Z}} )
-OB_MAX=52
+OB_DIGIT=( $(seq -w 0 99) )		# -w for equal width, so all two digits
+if [ "$USE_DIGIT" -gt "0" ]
+then
+	# bulk api automatically appends numbers to instance names
+	OB_SUFFIX=( ${OB_DIGIT[@]} )
+	OB_MAX=99
+else
+	# for basic creation, we create the names ourselves
+	OB_SUFFIX=( ${OB_ALPHA[@]} )
+	OB_MAX=52
+fi
 
 # create arrays of data and meta servers and use them to build
 # a pvfs2-genconfig command, which will end up looking something like this:
@@ -260,7 +274,7 @@ for i in `seq 1 $OB_OFS_SERVERS`
 do
 	for j in `seq 1 $OB_OFS_PER_INSTANCE`
 	do
-		this_pvfs2_server=$OB_OFS_NAME${OB_ALPHA[i]}:${port[$j]}
+		this_pvfs2_server=$OB_OFS_NAME${OB_SUFFIX[i]}:${port[$j]}
 		case ${OB_LAYOUT[$(( row +  j - 1 ))]} in
 			b) OB_DATA_ARRAY+=($this_pvfs2_server)
 			   OB_META_ARRAY+=($this_pvfs2_server);;
@@ -362,7 +376,7 @@ basic_create() {
 
 	for i in `seq 1 $num_instances`
 	do
-		OB_CMD="$OB_CREATE""$instance_name""${OB_ALPHA[i]}"
+		OB_CMD="$OB_CREATE""$instance_name""${OB_SUFFIX[i]}"
 		OB_CMD="$OB_CMD""$OB_IMAGE""$machine_type""$OB_SCOPE"
 		OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
 		OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
@@ -380,7 +394,7 @@ basic_create() {
 		eval $OB_CMD
 		if [ "$?" -gt "0" ]
 		then
-			echo "creation of ""$instance_name""${OB_ALPHA[i]}"" failed."
+			echo "creation of ""$instance_name""${OB_SUFFIX[i]}"" failed."
 			ob_cleanup
 		fi
 	done
@@ -430,7 +444,7 @@ collect_ips() {
 # collect the servers' external and internal IP addrs once they lanuch
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	instance_name="$OB_OFS_NAME""${OB_ALPHA[i]}"
+	instance_name="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 
 	wait_for_instance $instance_name
 	collect_ips $instance_name
@@ -439,7 +453,7 @@ done
 # collect the clients' external and internal IP addrs once they launch
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	instance_name="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	instance_name="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 
 	wait_for_instance $instance_name
 	collect_ips $instance_name
@@ -453,14 +467,14 @@ for i in `seq 1 $OB_OFS_SERVERS`
 do
 	OB_TRYS=$OB_ATTEMPTS
 	while [ "$OB_TRYS" -gt "0" ] && \
-		! nc -z ${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]} 22
+		! nc -z ${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]} 22
 	do
 		sleep $OB_SLEEP
 		OB_TRYS=$(( OB_TRYS - 1 ))
 		if [ "$OB_TRYS" -eq "0" ]
 		then
 			echo -e "\nno response from " \
-			"${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}" \
+			"${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}" \
 			"on port 22."
 			ob_cleanup
 		fi
@@ -473,15 +487,15 @@ echo -n "add ofs server internal IP addrs to each server's host file. "
 # make a local file of host lines to add to all the cloud servers.
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+	OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 	echo "$OB_IN_IP"" ""$OB_HOST" >> hostfile
 done
 # append the local host file onto the end of all the server /etc/host files.
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 	# As we run tests over and over, IP addresses will end up
 	# getting reused. We want to run tests without having to
 	# do a bunch of .ssh/known_hosts maintenance, we'll turn
@@ -512,8 +526,8 @@ if [ $(( OB_SSD_NUM / OB_OFS_PER_INSTANCE )) -eq "1" ] ||
 then
 	for i in `seq 1 $OB_OFS_SERVERS`
 	do
-		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-		OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+		OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 		for j in `seq 1 $OB_SSD_NUM`
 		do
 			OB_LABEL="parted /dev/nvme0n"$j" --script mklabel gpt"
@@ -585,8 +599,8 @@ else
 	# More than one SSD per orangefs server.
 	for i in `seq 1 $OB_OFS_SERVERS`
 	do
-		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-		OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+		OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 
 		ssd_per_ofs=$(( OB_SSD_NUM / OB_OFS_PER_INSTANCE))
 		ssd_start=1
@@ -651,8 +665,8 @@ fi
 echo -n "edit config file mount points. "
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 	for j in `seq 1 $OB_OFS_PER_INSTANCE`
 	do
 		mount_point="$OB_MOUNT_POINT""${port[$j]}"
@@ -681,8 +695,8 @@ echo
 echo -n "start the servers. "
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_OFS_NAME""${OB_ALPHA[i]}"
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 	for j in `seq 1 $OB_OFS_PER_INSTANCE`
 	do
 		# deduce my whacky alias from the autogenned conf file.
@@ -738,14 +752,14 @@ for i in `seq 1 $OB_IO500_CLIENTS`
 do
 	OB_TRYS=$OB_ATTEMPTS
 	while [ "$OB_TRYS" -gt "0" ] && \
-		! nc -z ${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]} 22
+		! nc -z ${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]} 22
 	do
 		sleep $OB_SLEEP
 		OB_TRYS=$(( OB_TRYS - 1 ))
 		if [ "$OB_TRYS" -eq "0" ]
 		then
 			echo -e "\nno response from " \
-			"${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}" \
+			"${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}" \
 			"on port 22."
 			ob_cleanup
 		fi
@@ -757,15 +771,15 @@ echo " done."
 echo -n "add io500 client internal IP addrs to each clients's host file. "
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 	echo "$OB_IN_IP"" ""$OB_HOST" >> hostfile
 done
 # append the local host file onto the end of all the io500 client host files.
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 	scp -o "StrictHostKeyChecking no" \
 		hostfile "$OB_EX_IP": > /dev/null 2>&1
 	if [ "$?" -gt "0" ]
@@ -794,8 +808,8 @@ echo " done."
 echo -n "create ssh key pairs for the clients"
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
 		ssh-keygen -b 2048 -t rsa -f .ssh/id_rsa -q -N \"\" \
 			> /dev/null 2>&1
@@ -815,8 +829,8 @@ do
 done
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 	cat pub.keys | \
 		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
 			"cat >> .ssh/authorized_keys" 2> /dev/null
@@ -828,7 +842,7 @@ do
 
 	for j in `seq 1 $OB_IO500_CLIENTS`
 	do
-		jth_host="$OB_IO500_NAME""${OB_ALPHA[j]}"
+		jth_host="$OB_IO500_NAME""${OB_SUFFIX[j]}"
 		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
 			'ssh-keyscan -H '"$jth_host"' >> .ssh/known_hosts' \
 				2> /dev/null
@@ -845,8 +859,8 @@ echo " done."
 echo -n "mount the orangefs filesystem on the io500 clients. "
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 
 	# load the orangefs kernel module...
 	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
@@ -879,7 +893,7 @@ do
 	# mount the filesystem. Notice what "$OB_OFS_NAME"a resolves to.
 	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
 		sudo mount -t pvfs2 \
-			tcp://"$OB_OFS_NAME"a:3334/orangefs /pvfsmnt \
+			tcp://"$OB_OFS_NAME""${OB_SUFFIX[1]}":3334/orangefs /pvfsmnt \
 				> /dev/null 2>&1
 	if [ "$?" -gt "0" ]
 	then
@@ -950,8 +964,8 @@ then
 	echo -n "add openmpi vars to .bashrc on io500 clients."
 	for i in `seq 1 $OB_IO500_CLIENTS`
 	do
-		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
-		OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+		OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
 			sudo gsutil cp "$OB_BUCKET"/openmpivars . \
 				> /dev/null 2>&1
@@ -978,8 +992,8 @@ fi
 echo -n "copy io500 configs to the io500 clients. "
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_ALPHA[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_ALPHA[i]}"
+	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
 		gsutil cp "$OB_BUCKET"/config-custom.ini \
 		   "$OB_IO500_CONFIG" > /dev/null 2>&1
@@ -1008,11 +1022,11 @@ do
 done
 echo " done."
 
-# run io500 on the "a" io500 client.
+# run io500 on the "a" or "01" io500 client.
 if [ "$OB_IO500_CLIENTS" -gt "0" ] && [ "$OB_RUN_IO500" -gt "0" ]
 then
-        OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""a"]}"
-        OB_HOST="$OB_IO500_NAME""a"
+        OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[1]}"]}"
+        OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[1]}"
 
 	# run io500.sh
 	echo "start io500 on :""$OB_HOST"":."
