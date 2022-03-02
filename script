@@ -309,43 +309,58 @@ fi
 
 echo ""
 
-# create the ofs servers
-for i in `seq 1 $OB_OFS_SERVERS`
-do
-	OB_CMD="$OB_CREATE""$OB_OFS_NAME""${OB_ALPHA[i]}"
-	OB_CMD="$OB_CMD""$OB_IMAGE""$OB_OFS_MACHINE""$OB_SCOPE"
-	OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
-	OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
-	OB_CMD="$OB_CMD"" --no-user-output-enabled"
-	for j in `seq 1 $OB_SSD_NUM`
-	do
-		OB_CMD="$OB_CMD""$OB_SSD_ARG"
-	done
-	#echo $OB_CMD
-	eval $OB_CMD
-	if [ "$?" -gt "0" ]
-	then
-		echo "creation of ""$OB_OFS_NAME""${OB_ALPHA[i]}"" failed."
-		ob_cleanup
-	fi
-done
+# define an "enum" for instance types
+TYPE_OFS_SERVER=0
+TYPE_IO500_CLIENT=1
 
-# create the io500 clients
-for i in `seq 1 $OB_IO500_CLIENTS`
-do
-	OB_CMD="$OB_CREATE""$OB_IO500_NAME""${OB_ALPHA[i]}"
-	OB_CMD="$OB_CMD""$OB_IMAGE""$OB_IO500_MACHINE""$OB_SCOPE"
-	OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
-	OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
-	OB_CMD="$OB_CMD"" --no-user-output-enabled"
-#	echo $OB_CMD
-	eval $OB_CMD
-	if [ "$?" -gt "0" ]
+# function to create instances manually, using gcloud commands
+# usage: basic_create <num_instances> <ob_instance_type>
+basic_create() {
+	num_instances=$1
+	instance_type=$2
+
+	if [ $instance_type == $TYPE_OFS_SERVER ]
 	then
-		echo "creation of ""$OB_IO500_NAME""${OB_ALPHA[i]}"" failed."
+		instance_name="$OB_OFS_NAME"
+		machine_type="$OB_OFS_MACHINE"
+	elif [ $instance_type == $TYPE_IO500_CLIENT ]
+	then
+		instance_name="$OB_IO500_NAME"
+		machine_type="$OB_IO500_MACHINE"
+	else
+		echo "invalid instance type: ${instance_type}"
 		ob_cleanup
 	fi
-done
+
+	for i in `seq 1 $num_instances`
+	do
+		OB_CMD="$OB_CREATE""$instance_name""${OB_ALPHA[i]}"
+		OB_CMD="$OB_CMD""$OB_IMAGE""$machine_type""$OB_SCOPE"
+		OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
+		OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
+		OB_CMD="$OB_CMD"" --no-user-output-enabled"
+
+		if [ $instance_type == $TYPE_OFS_SERVER ]
+		then
+			for j in `seq 1 $OB_SSD_NUM`
+			do
+				OB_CMD="$OB_CMD""$OB_SSD_ARG"
+			done
+		fi
+
+		# echo $OB_CMD
+		eval $OB_CMD
+		if [ "$?" -gt "0" ]
+		then
+			echo "creation of ""$instance_name""${OB_ALPHA[i]}"" failed."
+			ob_cleanup
+		fi
+	done
+}
+
+# create server and client instances
+basic_create $OB_OFS_SERVERS $TYPE_OFS_SERVER
+basic_create $OB_IO500_CLIENTS $TYPE_IO500_CLIENT
 
 # function to wait for a launched instance to reach the RUNNING state
 wait_for_instance() {
