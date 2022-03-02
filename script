@@ -50,9 +50,11 @@ OB_IO500_CONFIG="/var/tmp"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-2"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-3"
-OB_IMAGE=" --image hubcap-io500-oiv1"
+OB_IMAGE="hubcap-io500-oiv1"
+OB_IMAGE_ARG=" --image=${OB_IMAGE}"
 
-OB_SCOPE=" --scopes=cloud-platform"
+OB_SCOPE="cloud-platform"
+OB_SCOPE_ARG=" --scopes=${OB_SCOPE}"
 
 # persistent place for results and configs and whatever.
 OB_BUCKET="gs://hubcap_bucket"
@@ -65,12 +67,12 @@ OB_OFS_SERVERS=2
 OB_OFS_PORT=3334
 OB_OFS_PER_INSTANCE=1
 OB_SEPARATE_DATA_META=0
-OB_OFS_MACHINE=" --machine-type=n2-standard-4"
-#OB_OFS_MACHINE=" --machine-type=n2-standard-80"
+OB_OFS_MACHINE="n2-standard-4"
+OB_OFS_MACHINE_ARG=" --machine-type=${OB_OFS_MACHINE}"
 
 OB_IO500_CLIENTS=1
-OB_IO500_MACHINE=" --machine-type=n2-standard-4"
-#OB_IO500_MACHINE=" --machine-type=n1-standard-16"
+OB_IO500_MACHINE="n2-standard-4"
+OB_IO500_MACHINE_ARG=" --machine-type=${OB_IO500_MACHINE}"
 
 # MAX per instance: 24 local SSD partitions - 9 TB - 2.4 million read IOPS
 # My observation is that nvme device names will be /dev/nvme0n1 - /dev/nvme0n24
@@ -364,11 +366,11 @@ basic_create() {
 	if [ $instance_type == $TYPE_OFS_SERVER ]
 	then
 		instance_name="$OB_OFS_NAME"
-		machine_type="$OB_OFS_MACHINE"
+		machine_type_arg="$OB_OFS_MACHINE_ARG"
 	elif [ $instance_type == $TYPE_IO500_CLIENT ]
 	then
 		instance_name="$OB_IO500_NAME"
-		machine_type="$OB_IO500_MACHINE"
+		machine_type_arg="$OB_IO500_MACHINE_ARG"
 	else
 		echo "invalid instance type: ${instance_type}"
 		ob_cleanup
@@ -377,7 +379,7 @@ basic_create() {
 	for i in `seq 1 $num_instances`
 	do
 		OB_CMD="$OB_CREATE""$instance_name""${OB_SUFFIX[i]}"
-		OB_CMD="$OB_CMD""$OB_IMAGE""$machine_type""$OB_SCOPE"
+		OB_CMD="$OB_CMD""$OB_IMAGE_ARG""$machine_type_arg""$OB_SCOPE_ARG"
 		OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
 		OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
 		OB_CMD="$OB_CMD"" --no-user-output-enabled"
