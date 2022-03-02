@@ -82,7 +82,7 @@ OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
 OB_MOUNT_POINT="/var/lib/orangefs"
 
 # If set, will create all instances inside a compact placement group.
-OB_USE_PLACEMENT_GROUP=1
+OB_USE_PLACEMENT_GROUP=0
 
 OB_NET_INT=""
 #OB_NET_INT=" --network-interface=nic-type=GVNIC"
