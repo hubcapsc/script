@@ -91,7 +91,7 @@ OB_USE_PLACEMENT_GROUP=0
 OB_POLICY_PREFIX="pattern1-io500-pg"
 
 # setup network options
-OB_SUBNET="io500-central1-sn"
+OB_SUBNET=""
 OB_NIC_TYPE=""			# empty string or "GVNIC" for now
 OB_USE_TIER1_NET=0		# if 1, must specify "GVNIC" for OB_NIC_TYPE
 
