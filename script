@@ -88,6 +88,7 @@ OB_MOUNT_POINT="/var/lib/orangefs"
 
 # If set, will create all instances inside a compact placement group.
 OB_USE_PLACEMENT_GROUP=0
+OB_POLICY_PREFIX="pattern1-io500-pg"
 
 # setup network options
 OB_SUBNET="io500-central1-sn"
@@ -317,7 +318,6 @@ echo ""
 OB_POLICY_CREATE="gcloud compute resource-policies create"
 OB_POLICY_TYPE="group-placement"
 OB_COLLOCATION="COLLOCATED"
-OB_POLICY_PREFIX="pattern1-io500-pg"
 
 if [ "$OB_USE_PLACEMENT_GROUP" -gt "0" ]
 then
