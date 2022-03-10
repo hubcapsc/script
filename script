@@ -433,6 +433,11 @@ bulk_create() {
 
 	# echo $OB_CMD
 	eval $OB_CMD
+	if [ "$?" -gt "0" ]
+	then
+		echo "creation of instances via bulk-create failed."
+		ob_cleanup
+	fi
 }
 
 # create server and client instances
