@@ -1,7 +1,9 @@
 import argparse
+import sys
 from enum import Enum
 
 import googleapiclient.discovery
+import google.auth.exceptions
 
 class OBInstType(Enum):
     SERVER = 1
@@ -229,7 +231,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     ob_opts = OBOptions(args)
 
-    compute = googleapiclient.discovery.build('compute', 'v1')
+    try:
+        compute = googleapiclient.discovery.build('compute', 'v1')
+    except google.auth.exceptions.DefaultCredentialsError:
+        print(
+            "No Google application credentials.\n"
+            "Please do one of the following before re-running the script:\n"
+            "1) Run `gcloud auth application-default login`\n"
+            "OR\n"
+            "2) Set the GOOGLE_APPLICATION_CREDENTIALS environment variable\n"
+        )
+        sys.exit(1)
 
     network_interface = setup_network_interface(ob_opts)
     create_instances(compute, ob_opts, network_interface, OBInstType.SERVER)
