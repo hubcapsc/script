@@ -80,6 +80,7 @@ def initialize_parser():
     parser.add_argument(
             "--nic-type",
             default=None,
+            choices=["", "GVNIC"],
             help="type of GCP vNIC to be used on generated network interface")
     parser.add_argument(
             "--enable-tier1-networking",
