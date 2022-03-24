@@ -9,13 +9,13 @@ ob_cleanup()
 	exit
 }
 
+OB_PROJECT="orangefsdev"
 OB_REGION="us-east1"
 # Must use us-central1-a zone for any vCPU count over 24
 OB_ZONE="us-east1-b"
-OB_PROJECT="orangefsdev"
+gcloud config set project "$OB_PROJECT"
 gcloud config set compute/region "$OB_REGION"
 gcloud config set compute/zone "$OB_ZONE"
-gcloud config set project "$OB_PROJECT"
 
 #OB_MPI_TYPE="intel"
 #OB_MPI_TYPE="openmpi"
