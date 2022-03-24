@@ -1,5 +1,6 @@
 import argparse
 import sys
+import json
 from enum import Enum
 
 import googleapiclient.discovery
@@ -222,10 +223,15 @@ def create_instances(compute, opts, network_interface, inst_type):
         "instanceProperties": instance_properties
     }
 
-    compute.instances().bulkInsert(
+    try:
+        compute.instances().bulkInsert(
             project=opts.project,
             zone=opts.zone,
             body=body).execute()
+    except googleapiclient.errors.HttpError as e:
+        error_msg = json.loads(e.content).get("error").get("message")
+        print(f"Error: {error_msg}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     parser = initialize_parser()
