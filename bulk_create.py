@@ -6,6 +6,8 @@ from enum import Enum
 import googleapiclient.discovery
 import google.auth.exceptions
 
+import utils
+
 class OBInstType(Enum):
     SERVER = 1
     CLIENT = 2
@@ -125,6 +127,34 @@ def initialize_parser():
 
     return parser
 
+# Verify user-specified Google Cloud resources
+def verify_inputs(args):
+    # required inputs
+    if (not utils.verify_project(args.project)
+            or not utils.verify_region(args.project, args.region)
+            or not utils.verify_zone(args.project, args.region, args.zone)
+            or not utils.verify_image(args.project, args.image)):
+        return False
+
+    if (not utils.verify_machine_type(
+            args.project, args.zone, args.server_type)):
+        return False
+
+    if (not utils.verify_machine_type(
+            args.project, args.zone, args.client_type)):
+        return False
+
+    # optional inputs
+    if (args.subnet
+            and not utils.verify_subnet(args.project, args.region, args.subnet)):
+        return False
+
+    if (args.policy
+            and not utils.verify_policy(args.project, args.region, args.policy)):
+        return False
+
+    return True
+
 def setup_network_interface(opts):
     network_interface = {
         "accessConfigs": [
@@ -239,6 +269,9 @@ def create_instances(compute, opts, network_interface, inst_type):
 if __name__ == "__main__":
     parser = initialize_parser()
     args = parser.parse_args()
+
+    if not verify_inputs(args):
+        sys.exit(1)
     ob_opts = OBOptions(args)
 
     try:
