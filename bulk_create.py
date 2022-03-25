@@ -27,7 +27,12 @@ class OBOptions:
             self.subnet = None
 
         self.policy = args.policy
-        self.nic_type = args.nic_type
+
+        if args.enable_tier1_networking and args.nic_type != "GVNIC":
+            print("Warning: Setting nic-type to \"GVNIC\" for Tier 1 networking.")
+            self.nic_type = "GVNIC"
+        else:
+            self.nic_type = args.nic_type
         self.enable_tier1_networking = args.enable_tier1_networking
 
         self.server = {
@@ -42,7 +47,6 @@ class OBOptions:
             "type": args.client_type,
             "prefix": args.client_prefix
         }
-
 
 
 def initialize_parser():
@@ -196,7 +200,6 @@ def setup_instance_properties(opts, is_server, net_int, disks):
             "automaticRestart": "false"
         }
 
-    # TODO: check that nic-type is set to "GVNIC"
     if opts.enable_tier1_networking:
         instance_properties["networkPerformanceConfig"] = {
             "totalEgressBandwidthTier": "TIER_1"
