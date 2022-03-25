@@ -270,6 +270,10 @@ if __name__ == "__main__":
     parser = initialize_parser()
     args = parser.parse_args()
 
+    if args.num_servers + args.num_clients < 1:
+        print("Error: Must specify at least one server or client.")
+        sys.exit(1)
+
     if not verify_inputs(args):
         sys.exit(1)
     ob_opts = OBOptions(args)
@@ -286,6 +290,9 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
-    network_interface = setup_network_interface(ob_opts)
-    create_instances(compute, ob_opts, network_interface, OBInstType.SERVER)
-    create_instances(compute, ob_opts, network_interface, OBInstType.CLIENT)
+    net_int = setup_network_interface(ob_opts)
+
+    if args.num_servers > 0:
+        create_instances(compute, ob_opts, net_int, OBInstType.SERVER)
+    if args.num_clients > 0:
+        create_instances(compute, ob_opts, net_int, OBInstType.CLIENT)
