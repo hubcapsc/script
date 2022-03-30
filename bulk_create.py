@@ -1,7 +1,12 @@
 import argparse
+import sys
+import json
 from enum import Enum
 
 import googleapiclient.discovery
+import google.auth.exceptions
+
+import utils
 
 class OBInstType(Enum):
     SERVER = 1
@@ -24,7 +29,12 @@ class OBOptions:
             self.subnet = None
 
         self.policy = args.policy
-        self.nic_type = args.nic_type
+
+        if args.enable_tier1_networking and args.nic_type != "GVNIC":
+            print("Warning: Setting nic-type to \"GVNIC\" for Tier 1 networking.")
+            self.nic_type = "GVNIC"
+        else:
+            self.nic_type = args.nic_type
         self.enable_tier1_networking = args.enable_tier1_networking
 
         self.server = {
@@ -39,7 +49,6 @@ class OBOptions:
             "type": args.client_type,
             "prefix": args.client_prefix
         }
-
 
 
 def initialize_parser():
@@ -78,6 +87,7 @@ def initialize_parser():
     parser.add_argument(
             "--nic-type",
             default=None,
+            choices=["", "GVNIC"],
             help="type of GCP vNIC to be used on generated network interface")
     parser.add_argument(
             "--enable-tier1-networking",
@@ -116,6 +126,34 @@ def initialize_parser():
             help="number of local SSDs to attach to each server instance")
 
     return parser
+
+# Verify user-specified Google Cloud resources
+def verify_inputs(args):
+    # required inputs
+    if (not utils.verify_project(args.project)
+            or not utils.verify_region(args.project, args.region)
+            or not utils.verify_zone(args.project, args.region, args.zone)
+            or not utils.verify_image(args.project, args.image)):
+        return False
+
+    if (not utils.verify_machine_type(
+            args.project, args.zone, args.server_type)):
+        return False
+
+    if (not utils.verify_machine_type(
+            args.project, args.zone, args.client_type)):
+        return False
+
+    # optional inputs
+    if (args.subnet
+            and not utils.verify_subnet(args.project, args.region, args.subnet)):
+        return False
+
+    if (args.policy
+            and not utils.verify_policy(args.project, args.region, args.policy)):
+        return False
+
+    return True
 
 def setup_network_interface(opts):
     network_interface = {
@@ -192,7 +230,6 @@ def setup_instance_properties(opts, is_server, net_int, disks):
             "automaticRestart": "false"
         }
 
-    # TODO: check that nic-type is set to "GVNIC"
     if opts.enable_tier1_networking:
         instance_properties["networkPerformanceConfig"] = {
             "totalEgressBandwidthTier": "TIER_1"
@@ -219,18 +256,43 @@ def create_instances(compute, opts, network_interface, inst_type):
         "instanceProperties": instance_properties
     }
 
-    compute.instances().bulkInsert(
+    try:
+        compute.instances().bulkInsert(
             project=opts.project,
             zone=opts.zone,
             body=body).execute()
+    except googleapiclient.errors.HttpError as e:
+        error_msg = json.loads(e.content).get("error").get("message")
+        print(f"Error: {error_msg}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     parser = initialize_parser()
     args = parser.parse_args()
+
+    if args.num_servers + args.num_clients < 1:
+        print("Error: Must specify at least one server or client.")
+        sys.exit(1)
+
+    if not verify_inputs(args):
+        sys.exit(1)
     ob_opts = OBOptions(args)
 
-    compute = googleapiclient.discovery.build('compute', 'v1')
+    try:
+        compute = googleapiclient.discovery.build('compute', 'v1')
+    except google.auth.exceptions.DefaultCredentialsError:
+        print(
+            "No Google application credentials.\n"
+            "Please do one of the following before re-running the script:\n"
+            "1) Run `gcloud auth application-default login`\n"
+            "OR\n"
+            "2) Set the GOOGLE_APPLICATION_CREDENTIALS environment variable\n"
+        )
+        sys.exit(1)
 
-    network_interface = setup_network_interface(ob_opts)
-    create_instances(compute, ob_opts, network_interface, OBInstType.SERVER)
-    create_instances(compute, ob_opts, network_interface, OBInstType.CLIENT)
+    net_int = setup_network_interface(ob_opts)
+
+    if args.num_servers > 0:
+        create_instances(compute, ob_opts, net_int, OBInstType.SERVER)
+    if args.num_clients > 0:
+        create_instances(compute, ob_opts, net_int, OBInstType.CLIENT)
