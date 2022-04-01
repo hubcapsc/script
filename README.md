@@ -39,7 +39,7 @@ These instructions assume the following already exist:
    are strictly necessary, use the following command instead:
 
    ```no-highlight
-   sudo dnf install -y nc perl-Term-ReadLine perl-Getopt::Long perl-Math-BigInt perl-FindBin
+   sudo dnf install -y nc perl-Term-ReadLine perl-Getopt-Long perl-Math-BigInt perl-FindBin
    ```
 
 2. Install `pvfs2-genconfig`
