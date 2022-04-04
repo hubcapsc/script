@@ -981,7 +981,17 @@ then
 		*******************************************************
 
 		SLOTS_MSG
+	elif [ "$OB_MPI_TYPE" = "vanilla" ]
+	then
+		# MPICH wants the format "<HOST>:<NUM_SLOTS>"
+		sed -i "s/$/:$OB_SLOTS/" hostfile
+		if [ "$?" -gt "0" ]
+		then
+			echo "adding slots to hostfile failed."
+			ob_cleanup
+		fi
 	else
+		# OpenMPI wants the format "<HOST> slots=<NUM_SLOTS>"
 		sed -i "s/$/ slots=$OB_SLOTS/" hostfile
 		if [ "$?" -gt "0" ]
 		then
