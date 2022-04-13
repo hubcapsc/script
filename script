@@ -495,7 +495,11 @@ for i in `seq 1 $OB_OFS_SERVERS`
 do
 	instance_name="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 
-	wait_for_instance $instance_name
+	if [ "$OB_USE_BULK_CREATE" -eq "0" ]
+	then
+		# if instances were created individually, they may not be RUNNING yet
+		wait_for_instance $instance_name
+	fi
 	collect_ips $instance_name
 done
 
@@ -504,7 +508,11 @@ for i in `seq 1 $OB_IO500_CLIENTS`
 do
 	instance_name="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 
-	wait_for_instance $instance_name
+	if [ "$OB_USE_BULK_CREATE" -eq "0" ]
+	then
+		# if instances were created individually, they may not be RUNNING yet
+		wait_for_instance $instance_name
+	fi
 	collect_ips $instance_name
 done
 
