@@ -237,6 +237,21 @@ def setup_instance_properties(opts, is_server, net_int, disks):
 
     return instance_properties
 
+def wait_for_operation(compute, operation, opts):
+    print(f"Waiting for {operation['operationType']} operation to finish...",
+          end=" ", flush=True)
+    while True:
+        result = compute.zoneOperations().wait(
+            project=opts.project,
+            zone=opts.zone,
+            operation=operation['name']).execute()
+
+        if result['status'] == 'DONE':
+            print("done.")
+            if 'error' in result:
+                raise Exception(result['error'])
+            return result
+
 def create_instances(compute, opts, network_interface, inst_type):
     if inst_type == OBInstType.SERVER:
         is_server = True
@@ -257,7 +272,7 @@ def create_instances(compute, opts, network_interface, inst_type):
     }
 
     try:
-        compute.instances().bulkInsert(
+        operation = compute.instances().bulkInsert(
             project=opts.project,
             zone=opts.zone,
             body=body).execute()
@@ -265,6 +280,8 @@ def create_instances(compute, opts, network_interface, inst_type):
         error_msg = json.loads(e.content).get("error").get("message")
         print(f"Error: {error_msg}")
         sys.exit(1)
+
+    wait_for_operation(compute, operation, opts)
 
 if __name__ == "__main__":
     parser = initialize_parser()

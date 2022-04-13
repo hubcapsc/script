@@ -360,6 +360,8 @@ TYPE_IO500_CLIENT=1
 
 # function to create instances manually, using gcloud commands
 # usage: basic_create <num_instances> <ob_instance_type>
+#
+# upon completion, instances may not be in the RUNNING state yet
 basic_create() {
 	num_instances=$1
 	instance_type=$2
@@ -404,6 +406,8 @@ basic_create() {
 }
 
 # function to create instances using the python bulk api via external script
+#
+# if successful, instances will be in RUNNING state upon completion
 bulk_create() {
 	BULK_CREATE_FILENAME="bulk_create.py"
 	OB_CMD="python $BULK_CREATE_FILENAME"
