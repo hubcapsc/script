@@ -241,14 +241,19 @@ def wait_for_operation(compute, operation, opts):
     print(f"Waiting for {operation['operationType']} operation to finish...",
           end=" ", flush=True)
     while True:
-        result = compute.zoneOperations().wait(
-            project=opts.project,
-            zone=opts.zone,
-            operation=operation['name']).execute()
+        try:
+            result = compute.zoneOperations().wait(
+                project=opts.project,
+                zone=opts.zone,
+                operation=operation['name']).execute()
+        except TimeoutError:
+            print("\b.", end=" ", flush=True)
+            continue
 
         if result['status'] == 'DONE':
             print("done.")
             if 'error' in result:
+                print(result['error'])
                 raise Exception(result['error'])
             return result
 
