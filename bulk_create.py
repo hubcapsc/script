@@ -37,6 +37,8 @@ class OBOptions:
             self.nic_type = args.nic_type
         self.enable_tier1_networking = args.enable_tier1_networking
 
+        self.threads_per_core = args.threads_per_core
+
         self.server = {
             "count": args.num_servers,
             "type": args.server_type,
@@ -124,6 +126,12 @@ def initialize_parser():
             type=int,
             default=0,
             help="number of local SSDs to attach to each server instance")
+    parser.add_argument(
+            "--threads-per-core",
+            type=int,
+            default=2,
+            choices=[1, 2],
+            help="number of threads per physical core on launched instances")
 
     return parser
 
@@ -209,6 +217,9 @@ def setup_disks(opts, is_server):
 
 def setup_instance_properties(opts, is_server, net_int, disks):
     instance_properties = {
+        "advancedMachineFeatures": {
+            "threadsPerCore": opts.threads_per_core
+        },
         "networkInterfaces": [net_int],
         "disks": disks,
         "serviceAccounts": [

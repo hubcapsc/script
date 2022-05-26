@@ -86,6 +86,19 @@ OB_SSD_DEV="/dev/nvme0n"
 OB_MDADM="mdadm --create /dev/md0 --level=0 --raid-devices="
 OB_MOUNT_POINT="/var/lib/orangefs"
 
+# Number of hardware threads (vCPUs) per physical core on each instance.
+# By default, GCP uses Simultaneous Multithreading (2 vCPUs per core), but
+# disabling it (by setting this to "1") can improve performance for some
+# HPC applications.
+# Accepted values are "1" or "2"
+OB_THREADS_PER_CORE=1
+if [ "$OB_THREADS_PER_CORE" -ne "1" ] && [ "$OB_THREADS_PER_CORE" -ne "2" ]
+then
+	echo "invalid number of threads per core; must be 1 or 2"
+	exit
+fi
+OB_THREADS_ARG=" --threads-per-core=${OB_THREADS_PER_CORE}"
+
 # If set, will create all instances inside a compact placement group.
 OB_USE_PLACEMENT_GROUP=0
 OB_POLICY_PREFIX="pattern1-io500-pg"
@@ -385,6 +398,7 @@ basic_create() {
 		OB_CMD="$OB_CMD""$OB_IMAGE_ARG""$machine_type_arg""$OB_SCOPE_ARG"
 		OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
 		OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
+		OB_CMD="$OB_CMD""$OB_THREADS_ARG"
 		OB_CMD="$OB_CMD"" --no-user-output-enabled"
 
 		if [ $instance_type == $TYPE_OFS_SERVER ]
@@ -417,6 +431,7 @@ bulk_create() {
 	OB_CMD+=" --server-type=$OB_OFS_MACHINE --client-type=$OB_IO500_MACHINE"
 	OB_CMD+=" --server-prefix=$OB_OFS_NAME --client-prefix=$OB_IO500_NAME"
 	OB_CMD+=" --num-ssd-per-server=$OB_SSD_NUM"
+	OB_CMD+=" --threads-per-core=$OB_THREADS_PER_CORE"
 
 	if [ -n "${OB_SUBNET}" ]
 	then
