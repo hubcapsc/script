@@ -665,6 +665,16 @@ then
 				ob_cleanup
 			fi
 			echo "SSD #"$j" mounted on "$OB_HOST
+
+			# add to /etc/fstab for automount on reboot
+			index=$((j-1))
+			device="/dev/disk/by-id/google-local-nvme-ssd-${index}-part1"
+			cmd="echo UUID=\$(blkid -s UUID -o value ${device})"
+			cmd+=" ${mount_point} ext4 discard,defaults,nofail 0 2"
+			cmd+=" | sudo tee -a /etc/fstab"
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+				sudo sh -c \'${cmd}\' > /dev/null 2>&1
+			echo "SSD #${j} added to /etc/fstab for automount on reboot"
 		done
 	done
 else
@@ -727,6 +737,14 @@ else
 				ob_cleanup
 			fi
 			echo "RAID mounted on "$OB_HOST" "$j
+
+			# add to /etc/fstab for automount on reboot
+			cmd="echo UUID=\$(blkid -s UUID -o value /dev/md${j})"
+			cmd+=" ${mount_point} ext4 discard,defaults,nofail 0 2"
+			cmd+=" | sudo tee -a /etc/fstab"
+			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+				sudo sh -c \'${cmd}\' > /dev/null 2>&1
+			echo "md${j} array added to /etc/fstab for automount on reboot"
 		done
 	done
 fi
