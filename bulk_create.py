@@ -45,12 +45,16 @@ class OBOptions:
             "prefix": args.server_prefix,
             "num_ssd_per": args.num_ssd_per_server
         }
+        if args.server_metadata:
+            self.server["metadata"] = parse_metadata_str(args.server_metadata)
 
         self.client = {
             "count": args.num_clients,
             "type": args.client_type,
             "prefix": args.client_prefix
         }
+        if args.client_metadata:
+            self.client["metadata"] = parse_metadata_str(args.client_metadata)
 
 
 def initialize_parser():
@@ -122,6 +126,14 @@ def initialize_parser():
             required=True,
             help="string to begin all client names with")
     parser.add_argument(
+            "--server-metadata",
+            default=None,
+            help="comma-separated list of custom metadata key=value pairs")
+    parser.add_argument(
+            "--client-metadata",
+            default=None,
+            help="comma-separated list of custom metadata key=value pairs")
+    parser.add_argument(
             "--num-ssd-per-server",
             type=int,
             default=0,
@@ -134,6 +146,41 @@ def initialize_parser():
             help="number of threads per physical core on launched instances")
 
     return parser
+
+# Take a string of comma-separated key/value pairs of the form
+# "key1=val1,key2=val2" and return a dictionary in the metadata format
+# expected by the Google Python Client API, i.e.:
+# {
+#     "items": [
+#         {
+#             "key": "key1",
+#             "value": "val1"
+#         },
+#         {
+#             "key": "key2",
+#             "value": "val2"
+#         }
+#     ]
+# }
+def parse_metadata_str(md_str):
+    metadata = {}
+    metadata["items"] = []
+
+    kv_str_list = md_str.split(',')
+    for kv_str in kv_str_list:
+        kv_pair = kv_str.split('=', maxsplit=1)
+        try:
+            new_entry = {
+                "key": kv_pair[0],
+                "value": kv_pair[1]
+            }
+        except IndexError:
+            # Google allows a key with no value, so we will too
+            new_entry = {
+                "key": kv_pair[0]
+            }
+        metadata["items"].append(new_entry)
+    return metadata
 
 # Verify user-specified Google Cloud resources
 def verify_inputs(args):
@@ -231,8 +278,12 @@ def setup_instance_properties(opts, is_server, net_int, disks):
 
     if is_server:
         instance_properties["machineType"] = opts.server["type"]
+        if "metadata" in opts.server:
+            instance_properties["metadata"] = opts.server["metadata"]
     else:
         instance_properties["machineType"] = opts.client["type"]
+        if "metadata" in opts.client:
+            instance_properties["metadata"] = opts.client["metadata"]
 
     if opts.policy:
         instance_properties["resourcePolicies"] = [opts.policy]

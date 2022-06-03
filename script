@@ -136,6 +136,15 @@ else
 	OB_NET_PERF=""
 fi
 
+# Associative arrays of metadata key/value pairs to assign to each instance
+declare -A OB_SERVER_METADATA
+declare -A OB_CLIENT_METADATA
+
+OB_SERVER_METADATA["type"]="server"
+OB_CLIENT_METADATA["type"]="client"
+# Custom metadata can be assigned by simply adding more entries like the two
+# above, e.g.:
+# OB_SERVER_METADATA["custom-key"]="some_value"
 
 # Here we can configure some servers to be data only, some to be meta only,
 # and the rest will be both. These are used only when generating
@@ -367,6 +376,24 @@ fi
 
 echo ""
 
+# Convert associative arrays of metadata key/value pairs into strings
+# in the form that gcloud expects for the --metatdata argument
+# (i.e. "key1=value1,key2=value2")
+metadata_kv_string_from_array() {
+	local -n arr=$1
+	md_str=""
+	for key in "${!arr[@]}"
+	do
+		md_str+="${key}=${arr[$key]},"
+	done
+	md_str="${md_str::-1}"	# remove trailing comma
+	echo "$md_str"
+}
+OB_SERVER_METADATA_STR=$(metadata_kv_string_from_array OB_SERVER_METADATA)
+OB_CLIENT_METADATA_STR=$(metadata_kv_string_from_array OB_CLIENT_METADATA)
+OB_SERVER_METADATA_ARG=" --metadata=${OB_SERVER_METADATA_STR}"
+OB_CLIENT_METADATA_ARG=" --metadata=${OB_CLIENT_METADATA_STR}"
+
 # define an "enum" for instance types
 TYPE_OFS_SERVER=0
 TYPE_IO500_CLIENT=1
@@ -383,10 +410,12 @@ basic_create() {
 	then
 		instance_name="$OB_OFS_NAME"
 		machine_type_arg="$OB_OFS_MACHINE_ARG"
+		metadata_arg="$OB_SERVER_METADATA_ARG"
 	elif [ $instance_type == $TYPE_IO500_CLIENT ]
 	then
 		instance_name="$OB_IO500_NAME"
 		machine_type_arg="$OB_IO500_MACHINE_ARG"
+		metadata_arg="$OB_CLIENT_METADATA_ARG"
 	else
 		echo "invalid instance type: ${instance_type}"
 		ob_cleanup
@@ -399,6 +428,7 @@ basic_create() {
 		OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
 		OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
 		OB_CMD="$OB_CMD""$OB_THREADS_ARG"
+		OB_CMD="$OB_CMD""$metadata_arg"
 		OB_CMD="$OB_CMD"" --no-user-output-enabled"
 
 		if [ $instance_type == $TYPE_OFS_SERVER ]
@@ -430,6 +460,8 @@ bulk_create() {
 	OB_CMD+=" --num-servers=$OB_OFS_SERVERS --num-clients=$OB_IO500_CLIENTS"
 	OB_CMD+=" --server-type=$OB_OFS_MACHINE --client-type=$OB_IO500_MACHINE"
 	OB_CMD+=" --server-prefix=$OB_OFS_NAME --client-prefix=$OB_IO500_NAME"
+	OB_CMD+=" --server-metadata=$OB_SERVER_METADATA_STR"
+	OB_CMD+=" --client-metadata=$OB_CLIENT_METADATA_STR"
 	OB_CMD+=" --num-ssd-per-server=$OB_SSD_NUM"
 	OB_CMD+=" --threads-per-core=$OB_THREADS_PER_CORE"
 
