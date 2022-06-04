@@ -146,6 +146,22 @@ OB_CLIENT_METADATA["type"]="client"
 # above, e.g.:
 # OB_SERVER_METADATA["custom-key"]="some_value"
 
+# Path to a local script to be used as a startup script on created instances
+OB_STARTUP_SCRIPT=""
+if [ -n "$OB_STARTUP_SCRIPT" ]
+then
+	if [ -e "$OB_STARTUP_SCRIPT" ]
+	then
+		OB_STARTUP_SCRIPT_ARG=" --metadata-from-file="
+		OB_STARTUP_SCRIPT_ARG+="startup-script=${OB_STARTUP_SCRIPT}"
+	else
+		echo "Error: Startup script does not exist: '${OB_STARTUP_SCRIPT}'"
+		exit
+	fi
+else
+	OB_STARTUP_SCRIPT_ARG=""
+fi
+
 # Here we can configure some servers to be data only, some to be meta only,
 # and the rest will be both. These are used only when generating
 # a balanced layout and overridden when the script runner supplies a
@@ -428,6 +444,7 @@ basic_create() {
 		OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
 		OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
 		OB_CMD="$OB_CMD""$OB_THREADS_ARG"
+		OB_CMD="$OB_CMD""$OB_STARTUP_SCRIPT_ARG"
 		OB_CMD="$OB_CMD""$metadata_arg"
 		OB_CMD="$OB_CMD"" --no-user-output-enabled"
 
@@ -480,6 +497,10 @@ bulk_create() {
 	if [ "$OB_USE_TIER1_NET" -gt "0" ]
 	then
 		OB_CMD+=" --enable-tier1-networking"
+	fi
+	if [ -n "${OB_STARTUP_SCRIPT}" ]
+	then
+		OB_CMD+=" --startup-script=$OB_STARTUP_SCRIPT"
 	fi
 
 	# echo $OB_CMD

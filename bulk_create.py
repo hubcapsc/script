@@ -56,6 +56,10 @@ class OBOptions:
         if args.client_metadata:
             self.client["metadata"] = parse_metadata_str(args.client_metadata)
 
+        if args.startup_script:
+            self.startup_script = stringify_startup_script(args.startup_script)
+        else:
+            self.startup_script = None
 
 def initialize_parser():
     parser = argparse.ArgumentParser()
@@ -144,6 +148,10 @@ def initialize_parser():
             default=2,
             choices=[1, 2],
             help="number of threads per physical core on launched instances")
+    parser.add_argument(
+            "--startup-script",
+            default=None,
+            help="path to local startup script to run on launched instances")
 
     return parser
 
@@ -181,6 +189,20 @@ def parse_metadata_str(md_str):
             }
         metadata["items"].append(new_entry)
     return metadata
+
+# Read the contents of the startup script into a string
+#
+# With the Google Python Client API, a startup script must be specified
+# through custom instance metadata, as a key/value pair where the value
+# is a string containing the contents of the script.
+def stringify_startup_script(filename):
+    try:
+        with open(filename, 'r') as f:
+            script_text = f.read()
+    except FileNotFoundError as e:
+        print(e)
+        sys.exit(1)
+    return script_text
 
 # Verify user-specified Google Cloud resources
 def verify_inputs(args):
@@ -284,6 +306,19 @@ def setup_instance_properties(opts, is_server, net_int, disks):
         instance_properties["machineType"] = opts.client["type"]
         if "metadata" in opts.client:
             instance_properties["metadata"] = opts.client["metadata"]
+
+    if opts.startup_script:
+        startup_metadata = {
+            "key": "startup-script",
+            "value": opts.startup_script
+        }
+
+        if "metadata" in instance_properties:
+            instance_properties["metadata"]["items"].append(startup_metadata)
+        else:
+            instance_properties["metadata"] = {
+                "items": [startup_metadata]
+            }
 
     if opts.policy:
         instance_properties["resourcePolicies"] = [opts.policy]
