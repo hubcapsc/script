@@ -1,6 +1,7 @@
 import argparse
 import sys
 import json
+import socket
 from enum import Enum
 
 import googleapiclient.discovery
@@ -343,7 +344,7 @@ def wait_for_operation(compute, operation, opts):
                 project=opts.project,
                 zone=opts.zone,
                 operation=operation['name']).execute()
-        except TimeoutError:
+        except (TimeoutError, socket.timeout):
             print("\b.", end=" ", flush=True)
             continue
 
