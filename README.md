@@ -253,6 +253,7 @@ gcloud compute resource-policies delete <POLICY_NAME>
 | `OB_SUBNET` | Name of subnetwork to launch instances in |
 | `OB_NIC_TYPE` | Set to "GVNIC" if Tier 1 network performance is desired |
 | `OB_USE_TIER1_NET` | Set to 1 if Tier 1 network performance is desired |
+| `OB_STARTUP_SCRIPT` | Local path to a script to run on each instance upon launch |
 
 This is not an exhaustive list of available options, but these are the most likely options a new user will first want to change. There are more options
 that can be used to customize the behavior and performance of the OrangeFS
