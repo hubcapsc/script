@@ -262,25 +262,10 @@ filesystem.
 ### `OB_BUCKET`
 
 The `OB_BUCKET` option should be set to the gsutil URI of a Google Cloud
-Storage bucket containing at least the following three files:
+Storage bucket containing at least the following two files:
 
 - `io500.sh`: a valid IO500 script
 - `config-custom.ini`: a valid IO500 configuration file
-- `openmpivars`: see the [next section](#openmpivars-file)
 
 See <https://github.com/IO500/io500> for more information on the IO500 script
 and .ini configuration file.
-
-#### `openmpivars` File
-
-**NOTE:** If you never plan to use OpenMPI, this file can be excluded.
-
-This file must contain the appropriate `PATH` and `LD_LIBRARY_PATH` for the
-OpenMPI installation on the image used to create your instances. For the
-default `OB_IMAGE`, the `openmpivars` file looks like this (a standard OpenMPI
-installation):
-
-```no-highlight
-PATH="/opt/openmpi-4.1.1/bin:$PATH"
-LD_LIBRARY_PATH="/opt/openmpi-4.1.1/lib:$LD_LIBRARY_PATH"
-```
