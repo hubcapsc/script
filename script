@@ -50,7 +50,7 @@ OB_IO500_CONFIG="/var/tmp"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-2"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-3"
-OB_IMAGE="hubcap-io500-oiv1"
+OB_IMAGE="david-io500-sc22-update-8"
 OB_IMAGE_ARG=" --image=${OB_IMAGE}"
 
 OB_SCOPE="cloud-platform"
@@ -1110,16 +1110,7 @@ then
 		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
 		OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-			sudo gsutil cp "$OB_BUCKET"/openmpivars . \
-				> /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo "bucket cp openmpi path to :""$OB_HOST"": failed."
-			ob_cleanup
-		fi
-
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-			sudo sh -c \'cat openmpivars \>\> .bashrc\' \
+			sudo sh -c \'cat "$OB_MPI_REPO"/openmpivars \>\> .bashrc\' \
 				> /dev/null 2>&1
 		if [ "$?" -gt "0" ]
 		then
