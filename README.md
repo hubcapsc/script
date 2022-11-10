@@ -194,10 +194,10 @@ chmod u+x /var/tmp/io500.sh
 ## Cleaning Up
 
 The script will create a number of server and client instances in your Google
-Cloud project. If the configuration option `OB_USE_PLACEMENT_GROUP` is set, a
-resource policy will also be created. To avoid incurring unwanted charges to
-your Google Cloud account or cluttering up your project with unused policies,
-be sure to delete these resources when you are finished with them.
+Cloud project. If the configuration option `OB_PLACEMENT_POLICY` is set, one or
+more resource policies will also be created. To avoid incurring unwanted
+charges to your Google Cloud account or cluttering up your project with unused
+policies, be sure to delete these resources when you are finished with them.
 
 ### Deleting Instances
 
@@ -248,8 +248,8 @@ gcloud compute resource-policies delete <POLICY_NAME>
 | `OB_OFS_MACHINE` | GCP machine type to use for servers |
 | `OB_IO500_MACHINE` | GCP machine type to use for clients |
 | `OB_SSD_NUM` | Number of local NVMe drives to attach to each server instance |
-| `OB_USE_PLACEMENT_GROUP`| Set to 1 to launch instances with a compact placement policy |
-| `OB_POLICY_PREFIX` | String to begin the resource policy name with |
+| `OB_PLACEMENT_POLICY`| Instance types to apply a compact placement policy to (see [below](#ob_placement_policy)) |
+| `OB_POLICY_PREFIX` | String to begin the resource policy name(s) with |
 | `OB_SUBNET` | Name of subnetwork to launch instances in |
 | `OB_NIC_TYPE` | Set to "GVNIC" if Tier 1 network performance is desired |
 | `OB_USE_TIER1_NET` | Set to 1 if Tier 1 network performance is desired |
@@ -269,3 +269,14 @@ Storage bucket containing at least the following two files:
 
 See <https://github.com/IO500/io500> for more information on the IO500 script
 and .ini configuration file.
+
+### `OB_PLACEMENT_POLICY`
+
+If `OB_PLACEMENT_POLICY` is set, the script will create a compact placement
+policy and apply it to the specified instances. It must be set to one of the
+following strings:
+
+- `NONE` (or empty string) - do not create a placement policy
+- `CLIENTS` - create a single policy for IO500 clients only
+- `SERVERS` - create a single policy for OFS servers only
+- `SEPARATE` - create two policies, one for servers and one for clients

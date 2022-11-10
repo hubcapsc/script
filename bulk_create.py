@@ -29,8 +29,6 @@ class OBOptions:
         else:
             self.subnet = None
 
-        self.policy = args.policy
-
         if args.enable_tier1_networking and args.nic_type != "GVNIC":
             print("Warning: Setting nic-type to \"GVNIC\" for Tier 1 networking.")
             self.nic_type = "GVNIC"
@@ -48,6 +46,8 @@ class OBOptions:
         }
         if args.server_metadata:
             self.server["metadata"] = parse_metadata_str(args.server_metadata)
+        if args.server_policy:
+            self.server["policy"] = args.server_policy
 
         self.client = {
             "count": args.num_clients,
@@ -56,6 +56,8 @@ class OBOptions:
         }
         if args.client_metadata:
             self.client["metadata"] = parse_metadata_str(args.client_metadata)
+        if args.client_policy:
+            self.client["policy"] = args.client_policy
 
         if args.startup_script:
             self.startup_script = stringify_startup_script(args.startup_script)
@@ -92,9 +94,13 @@ def initialize_parser():
             default=None,
             help="subnetwork to create instances in")
     parser.add_argument(
-            "--policy",
+            "--server-policy",
             default=None,
-            help="name of resource policy to apply to instances")
+            help="name of resource policy to apply to server instances")
+    parser.add_argument(
+            "--client-policy",
+            default=None,
+            help="name of resource policy to apply to client instances")
     parser.add_argument(
             "--nic-type",
             default=None,
@@ -227,8 +233,13 @@ def verify_inputs(args):
             and not utils.verify_subnet(args.project, args.region, args.subnet)):
         return False
 
-    if (args.policy
-            and not utils.verify_policy(args.project, args.region, args.policy)):
+    if (args.server_policy
+            and not utils.verify_policy(
+                args.project, args.region, args.server_policy)):
+        return False
+    if (args.client_policy
+            and not utils.verify_policy(
+                args.project, args.region, args.client_policy)):
         return False
 
     return True
@@ -303,10 +314,20 @@ def setup_instance_properties(opts, is_server, net_int, disks):
         instance_properties["machineType"] = opts.server["type"]
         if "metadata" in opts.server:
             instance_properties["metadata"] = opts.server["metadata"]
+        if "policy" in opts.server:
+            instance_properties["resourcePolicies"] = [opts.server["policy"]]
     else:
         instance_properties["machineType"] = opts.client["type"]
         if "metadata" in opts.client:
             instance_properties["metadata"] = opts.client["metadata"]
+        if "policy" in opts.client:
+            instance_properties["resourcePolicies"] = [opts.client["policy"]]
+
+    if "resourcePolicies" in instance_properties:
+        instance_properties["scheduling"] = {
+            "onHostMaintenance": "TERMINATE",
+            "automaticRestart": "false"
+        }
 
     if opts.startup_script:
         startup_metadata = {
@@ -320,13 +341,6 @@ def setup_instance_properties(opts, is_server, net_int, disks):
             instance_properties["metadata"] = {
                 "items": [startup_metadata]
             }
-
-    if opts.policy:
-        instance_properties["resourcePolicies"] = [opts.policy]
-        instance_properties["scheduling"] = {
-            "onHostMaintenance": "TERMINATE",
-            "automaticRestart": "false"
-        }
 
     if opts.enable_tier1_networking:
         instance_properties["networkPerformanceConfig"] = {

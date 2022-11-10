@@ -99,8 +99,16 @@ then
 fi
 OB_THREADS_ARG=" --threads-per-core=${OB_THREADS_PER_CORE}"
 
-# If set, will create all instances inside a compact placement group.
-OB_USE_PLACEMENT_GROUP=0
+# If OB_PLACEMENT_POLICY is set, it will attempt to create the specified
+# instances with a compact placement policy. It must be set to one of the
+# following strings:
+#
+# "NONE" (or empty string) - do not create a placement policy
+# "CLIENTS" - create a single policy for clients only
+# "SERVERS" - create a single policy for servers only
+# "SEPARATE" - two policies, one for servers and one for clients
+# "SHARED" - single shared policy for both clients and servers (future update)
+OB_PLACEMENT_POLICY="NONE"
 OB_POLICY_PREFIX="pattern1-io500-pg"
 
 # setup network options
@@ -360,36 +368,63 @@ eval "$OB_OFS_CONFIG"
 
 echo ""
 
-# create a compact placement group
+# create compact placement policies
 OB_POLICY_CREATE="gcloud compute resource-policies create"
 OB_POLICY_TYPE="group-placement"
-OB_COLLOCATION="COLLOCATED"
+OB_COLLOCATION="collocated"
 
-if [ "$OB_USE_PLACEMENT_GROUP" -gt "0" ]
-then
-	if [ "$OB_OFS_MACHINE" != "$OB_IO500_MACHINE" ]
-	then
-		echo "server and client machine types must match for a compact placement group."
-		ob_cleanup
-	fi
+# function to create a compact placement policy
+# usage: create_policy <policy_name> <vm_count>
+create_policy() {
+	policy_name=$1
+	vm_count=$2
 
-	ts=$(date "+%Y%m%d-%H%M%S")
-	OB_POLICY_NAME="${OB_POLICY_PREFIX}-${ts}"
-	vm_count=$(( OB_OFS_SERVERS + OB_IO500_CLIENTS ))
-
-	OB_CMD="$OB_POLICY_CREATE $OB_POLICY_TYPE $OB_POLICY_NAME"
+	# create the policy
+	OB_CMD="$OB_POLICY_CREATE $OB_POLICY_TYPE $policy_name"
 	OB_CMD+=" --collocation=$OB_COLLOCATION"
 	OB_CMD+=" --vm-count=$vm_count"
 	#echo $OB_CMD
 	eval $OB_CMD
 	if [ "$?" -gt "0" ]
 	then
-		echo "creation of "$OB_POLICY_NAME" failed."
+		echo "creation of "$policy_name" failed."
+		ob_cleanup
+	fi
+}
+
+if [ -n "$OB_PLACEMENT_POLICY" ] && [ "$OB_PLACEMENT_POLICY" != "NONE" ]
+then
+	ts=$(date "+%Y%m%d-%H%M%S")
+	OB_POLICY_NAME="${OB_POLICY_PREFIX}-${ts}"
+
+	if [ "$OB_PLACEMENT_POLICY" == "CLIENTS" ]
+	then
+		create_policy $OB_POLICY_NAME $OB_IO500_CLIENTS
+		OB_CLIENT_POLICY_OPTS=" --resource-policies=$OB_POLICY_NAME"
+		OB_SERVER_POLICY_OPTS=""
+	elif [ "$OB_PLACEMENT_POLICY" == "SERVERS" ]
+	then
+		create_policy $OB_POLICY_NAME $OB_OFS_SERVERS
+		OB_SERVER_POLICY_OPTS=" --resource-policies=$OB_POLICY_NAME"
+		OB_CLIENT_POLICY_OPTS=""
+	elif [ "$OB_PLACEMENT_POLICY" == "SEPARATE" ]
+	then
+		OB_SERVER_POLICY_NAME="${OB_POLICY_NAME}-servers"
+		OB_CLIENT_POLICY_NAME="${OB_POLICY_NAME}-clients"
+		create_policy $OB_SERVER_POLICY_NAME $OB_OFS_SERVERS
+		create_policy $OB_CLIENT_POLICY_NAME $OB_IO500_CLIENTS
+		OB_SERVER_POLICY_OPTS=" --resource-policies=$OB_SERVER_POLICY_NAME"
+		OB_CLIENT_POLICY_OPTS=" --resource-policies=$OB_CLIENT_POLICY_NAME"
+	elif [ "$OB_PLACEMENT_POLICY" == "SHARED" ]
+	then
+		# TODO: implement shared policies
+		echo "Support for a shared placement policy will be added in a future update."
+		echo "For now, please choose NONE, CLIENTS, or SERVERS."
 		ob_cleanup
 	fi
 
-	OB_POLICY_OPTS=" --resource-policies=$OB_POLICY_NAME"
-	OB_POLICY_OPTS+=" --maintenance-policy=TERMINATE"
+	# set generic policy options for instance creation
+	OB_POLICY_OPTS=" --maintenance-policy=TERMINATE"
 	OB_POLICY_OPTS+=" --no-restart-on-failure"
 
 	# TODO: add cleanup message/instructions for policy to ob_cleanup
@@ -432,11 +467,11 @@ basic_create() {
 		OB_CMD="$OB_CREATE""$instance_name""${OB_SUFFIX[i]}"
 		OB_CMD="$OB_CMD""$OB_IMAGE_ARG""$machine_type_arg""$OB_SCOPE_ARG"
 		OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
-		OB_CMD="$OB_CMD""$OB_POLICY_OPTS"" --async"
 		OB_CMD="$OB_CMD""$OB_THREADS_ARG"
 		OB_CMD="$OB_CMD""$OB_STARTUP_SCRIPT_ARG"
 		OB_CMD="$OB_CMD""$metadata_arg"
 		OB_CMD="$OB_CMD"" --no-user-output-enabled"
+		OB_CMD="$OB_CMD"" --async"
 
 		if [ $instance_type == $TYPE_OFS_SERVER ]
 		then
@@ -444,6 +479,22 @@ basic_create() {
 			do
 				OB_CMD="$OB_CMD""$OB_SSD_ARG"
 			done
+		fi
+
+		if [ -n "$OB_POLICY_NAME" ]
+		then
+			if [ $instance_type == $TYPE_OFS_SERVER ]
+			then
+				if [ -n "$OB_SERVER_POLICY_OPTS" ]
+				then
+					OB_CMD="$OB_CMD""$OB_SERVER_POLICY_OPTS""$OB_POLICY_OPTS"
+				fi
+			else
+				if [ -n "$OB_CLIENT_POLICY_OPTS" ]
+				then
+					OB_CMD="$OB_CMD""$OB_CLIENT_POLICY_OPTS""$OB_POLICY_OPTS"
+				fi
+			fi
 		fi
 
 		# echo $OB_CMD
@@ -478,7 +529,17 @@ bulk_create() {
 	fi
 	if [ -n "${OB_POLICY_NAME}" ]
 	then
-		OB_CMD+=" --policy=$OB_POLICY_NAME"
+		if [ "$OB_PLACEMENT_POLICY" == "SERVERS" ]
+		then
+			OB_CMD+=" --server-policy=$OB_POLICY_NAME"
+		elif [ "$OB_PLACEMENT_POLICY" == "CLIENTS" ]
+		then
+			OB_CMD+=" --client-policy=$OB_POLICY_NAME"
+		elif [ "$OB_PLACEMENT_POLICY" == "SEPARATE" ]
+		then
+			OB_CMD+=" --server-policy=$OB_SERVER_POLICY_NAME"
+			OB_CMD+=" --client-policy=$OB_CLIENT_POLICY_NAME"
+		fi
 	fi
 	if [ -n "${OB_NIC_TYPE}" ]
 	then
