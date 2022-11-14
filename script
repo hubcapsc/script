@@ -5,8 +5,8 @@
 # function to call on normal exit and on any failure
 ob_cleanup()
 {
-	echo "remember to clean up test instances and resource policies"
-	exit
+    echo "remember to clean up test instances and resource policies"
+    exit
 }
 
 OB_PROJECT="orangefsdev"
@@ -94,8 +94,8 @@ OB_MOUNT_POINT="/var/lib/orangefs"
 OB_THREADS_PER_CORE=1
 if [ "$OB_THREADS_PER_CORE" -ne "1" ] && [ "$OB_THREADS_PER_CORE" -ne "2" ]
 then
-	echo "invalid number of threads per core; must be 1 or 2"
-	exit
+    echo "invalid number of threads per core; must be 1 or 2"
+    exit
 fi
 OB_THREADS_ARG=" --threads-per-core=${OB_THREADS_PER_CORE}"
 
@@ -119,29 +119,29 @@ OB_USE_TIER1_NET=0		# if 1, must specify "GVNIC" for OB_NIC_TYPE
 OB_NET_INT_ARGS=""
 if [ -n "${OB_SUBNET}" ]
 then
-	OB_NET_INT_ARGS="subnet=${OB_SUBNET}"
+    OB_NET_INT_ARGS="subnet=${OB_SUBNET}"
 fi
 if [ -n "${OB_NIC_TYPE}" ]
 then
-	# add comma if subnet was specified
-	if [ -n "${OB_SUBNET}" ]
-	then
-		OB_NET_INT_ARGS+=","
-	fi
-	OB_NET_INT_ARGS+="nic-type=${OB_NIC_TYPE}"
+    # add comma if subnet was specified
+    if [ -n "${OB_SUBNET}" ]
+    then
+        OB_NET_INT_ARGS+=","
+    fi
+    OB_NET_INT_ARGS+="nic-type=${OB_NIC_TYPE}"
 fi
 if [ -n "${OB_NET_INT_ARGS}" ]
 then
-	OB_NET_INT=" --network-interface=${OB_NET_INT_ARGS}"
+    OB_NET_INT=" --network-interface=${OB_NET_INT_ARGS}"
 else
-	OB_NET_INT=""
+    OB_NET_INT=""
 fi
 
 if [ "${OB_USE_TIER1_NET}" -gt "0" ]
 then
-	OB_NET_PERF=" --network-performance-configs=total-egress-bandwidth-tier=TIER_1"
+    OB_NET_PERF=" --network-performance-configs=total-egress-bandwidth-tier=TIER_1"
 else
-	OB_NET_PERF=""
+    OB_NET_PERF=""
 fi
 
 # Metadata key/value pairs to assign to each instance
@@ -151,31 +151,31 @@ OB_CLIENT_METADATA="type=client"
 
 if [ -n "$OB_SERVER_METADATA" ]
 then
-	OB_SERVER_METADATA_ARG=" --metadata=${OB_SERVER_METADATA}"
+    OB_SERVER_METADATA_ARG=" --metadata=${OB_SERVER_METADATA}"
 else
-	OB_SERVER_METADATA_ARG=""
+    OB_SERVER_METADATA_ARG=""
 fi
 if [ -n "$OB_CLIENT_METADATA" ]
 then
-	OB_CLIENT_METADATA_ARG=" --metadata=${OB_CLIENT_METADATA}"
+    OB_CLIENT_METADATA_ARG=" --metadata=${OB_CLIENT_METADATA}"
 else
-	OB_CLIENT_METADATA_ARG=""
+    OB_CLIENT_METADATA_ARG=""
 fi
 
 # Path to a local script to be used as a startup script on created instances
 OB_STARTUP_SCRIPT=""
 if [ -n "$OB_STARTUP_SCRIPT" ]
 then
-	if [ -e "$OB_STARTUP_SCRIPT" ]
-	then
-		OB_STARTUP_SCRIPT_ARG=" --metadata-from-file="
-		OB_STARTUP_SCRIPT_ARG+="startup-script=${OB_STARTUP_SCRIPT}"
-	else
-		echo "Error: Startup script does not exist: '${OB_STARTUP_SCRIPT}'"
-		exit
-	fi
+    if [ -e "$OB_STARTUP_SCRIPT" ]
+    then
+        OB_STARTUP_SCRIPT_ARG=" --metadata-from-file="
+        OB_STARTUP_SCRIPT_ARG+="startup-script=${OB_STARTUP_SCRIPT}"
+    else
+        echo "Error: Startup script does not exist: '${OB_STARTUP_SCRIPT}'"
+        exit
+    fi
 else
-	OB_STARTUP_SCRIPT_ARG=""
+    OB_STARTUP_SCRIPT_ARG=""
 fi
 
 # Here we can configure some servers to be data only, some to be meta only,
@@ -200,58 +200,58 @@ OB_LAYOUT=( 0 )
 # Generate a balanced layout if the script runner doesn't supply a layout.
 if [ "${OB_LAYOUT[0]}" -eq "0" ]
 then
-	# figure out the maximum number of data and/or meta only servers
-	# that can be deployed per instance in a balanced layout.
-	#
-	# On the Internet it says:
-	# To do rounding up ... simply add (denom-1) to the numerator.
-	#
-	data_max=$((( OB_OFS_DATA + ( OB_OFS_SERVERS - 1 )) / OB_OFS_SERVERS ))
-	meta_max=$((( OB_OFS_META + ( OB_OFS_SERVERS - 1 )) / OB_OFS_SERVERS ))
-	
-	data=$OB_OFS_DATA
-	meta=$OB_OFS_META
-	unset OB_LAYOUT
-	OB_LAYOUT[0]="1"
-	row=1
-	for i in `seq 1 $OB_OFS_SERVERS`
-	do
-		data_this_server=0
-		meta_this_server=0
-		for j in `seq 1 $OB_OFS_PER_INSTANCE`
-        	do
-			if [ "$data" -gt "0" -a \
-				"$data_this_server" -lt "$data_max" ]
-			then
-				OB_LAYOUT[$(( row + j - 1 ))]=d
-				data_this_server=$(( data_this_server + 1 ))
-				data=$(( data - 1 ))
-			elif [ "$meta" -gt "0" -a \
-				"$meta_this_server" -lt "$meta_max" ]
-			then
-				OB_LAYOUT[$(( row + j - 1 ))]=m
-				meta_this_server=$(( meta_this_server + 1 ))
-				meta=$(( meta - 1 ))
-			else
-				OB_LAYOUT[$(( row +  j - 1 ))]=b
-			fi
-		done
-		row=$((( row * j ) + 1 ))
-	done
+    # figure out the maximum number of data and/or meta only servers
+    # that can be deployed per instance in a balanced layout.
+    #
+    # On the Internet it says:
+    # To do rounding up ... simply add (denom-1) to the numerator.
+    #
+    data_max=$((( OB_OFS_DATA + ( OB_OFS_SERVERS - 1 )) / OB_OFS_SERVERS ))
+    meta_max=$((( OB_OFS_META + ( OB_OFS_SERVERS - 1 )) / OB_OFS_SERVERS ))
+
+    data=$OB_OFS_DATA
+    meta=$OB_OFS_META
+    unset OB_LAYOUT
+    OB_LAYOUT[0]="1"
+    row=1
+    for i in `seq 1 $OB_OFS_SERVERS`
+    do
+        data_this_server=0
+        meta_this_server=0
+        for j in `seq 1 $OB_OFS_PER_INSTANCE`
+            do
+            if [ "$data" -gt "0" -a \
+                "$data_this_server" -lt "$data_max" ]
+            then
+                OB_LAYOUT[$(( row + j - 1 ))]=d
+                data_this_server=$(( data_this_server + 1 ))
+                data=$(( data - 1 ))
+            elif [ "$meta" -gt "0" -a \
+                "$meta_this_server" -lt "$meta_max" ]
+            then
+                OB_LAYOUT[$(( row + j - 1 ))]=m
+                meta_this_server=$(( meta_this_server + 1 ))
+                meta=$(( meta - 1 ))
+            else
+                OB_LAYOUT[$(( row +  j - 1 ))]=b
+            fi
+        done
+        row=$((( row * j ) + 1 ))
+    done
 fi
 
-	echo "layout:""${OB_LAYOUT[@]}"":"
+    echo "layout:""${OB_LAYOUT[@]}"":"
 
 # sanity check: we should now have a layout data structure populated
 # with the same number of elements as we have pvfs2-server processes,
 # plus one for the set/unset cookie.
 if [ "${#OB_LAYOUT[@]}" -ne \
-		 "$((( OB_OFS_SERVERS * OB_OFS_PER_INSTANCE ) + 1 ))" ]
+         "$((( OB_OFS_SERVERS * OB_OFS_PER_INSTANCE ) + 1 ))" ]
 then
-	echo "layout:""${OB_LAYOUT[@]}"":"
-	echo "OB_OFS_SERVERS:""$OB_OFS_SERVERS"":"
-	echo "OB_OFS_PER_INSTANCE:""$OB_OFS_PER_INSTANCE"":"
-	exit
+    echo "layout:""${OB_LAYOUT[@]}"":"
+    echo "OB_OFS_SERVERS:""$OB_OFS_SERVERS"":"
+    echo "OB_OFS_PER_INSTANCE:""$OB_OFS_PER_INSTANCE"":"
+    exit
 fi
 
 OB_OFS_CONFIG="pvfs2-genconfig --iospec "
@@ -271,40 +271,40 @@ OB_SLEEP=5
 OB_CREATE="gcloud compute instances create "
 
 if [ $(( OB_OFS_DATA + OB_OFS_META )) -gt \
-	$(( OB_OFS_SERVERS * OB_OFS_PER_INSTANCE )) ]
+    $(( OB_OFS_SERVERS * OB_OFS_PER_INSTANCE )) ]
 then
-	echo "sum of pure data + pure meta must not exceed pvfs2-server number."
-	ob_cleanup
+    echo "sum of pure data + pure meta must not exceed pvfs2-server number."
+    ob_cleanup
 fi
 
 # create array of port numbers, one for each server.
 current_port="$OB_OFS_PORT"
 for i in `seq $OB_OFS_PER_INSTANCE`
 do
-	port[i]="$current_port"
-	current_port=$(( current_port + 1 ))
+    port[i]="$current_port"
+    current_port=$(( current_port + 1 ))
 done
 
 if [ "$OB_SSD_NUM" -lt "1" ]
 then
-	echo "must have at least one SSD."
-	ob_cleanup
+    echo "must have at least one SSD."
+    ob_cleanup
 fi
 
 if [ "$OB_SSD_NUM" -lt "$OB_OFS_PER_INSTANCE" ]
 then
-	echo "need at least one SSD for each pvfs2-server process."
-	echo "OB_SSD_NUM:""$OB_SSD_NUM"":"
-	echo "OB_OFS_PER_INSTANCE:""$OB_OFS_PER_INSTANCE"":"
-	ob_cleanup
+    echo "need at least one SSD for each pvfs2-server process."
+    echo "OB_SSD_NUM:""$OB_SSD_NUM"":"
+    echo "OB_OFS_PER_INSTANCE:""$OB_OFS_PER_INSTANCE"":"
+    ob_cleanup
 fi
 
 if [ "$OB_SSD_NUM" -lt $(( OB_OFS_PER_INSTANCE * 2 )) -a \
-	"$OB_SEPARATE_DATA_META" -eq "1" ]
+    "$OB_SEPARATE_DATA_META" -eq "1" ]
 then
-	echo "need at least two SSDs per pvfs2-server process to"
-	echo "keep IO and metadata separate."
-	ob_cleanup
+    echo "need at least two SSDs per pvfs2-server process to"
+    echo "keep IO and metadata separate."
+    ob_cleanup
 fi
 
 # indexed arrays of alphabet letters or numerical digits to append to host
@@ -313,13 +313,13 @@ OB_ALPHA=( {0,{a..z},{A..Z}} )
 OB_DIGIT=( $(seq -w 0 99) )		# -w for equal width, so all two digits
 if [ "$OB_USE_BULK_CREATE" -gt "0" ]
 then
-	# bulk api automatically appends numbers to instance names
-	OB_SUFFIX=( ${OB_DIGIT[@]} )
-	OB_MAX=99
+    # bulk api automatically appends numbers to instance names
+    OB_SUFFIX=( ${OB_DIGIT[@]} )
+    OB_MAX=99
 else
-	# for basic creation, we create the names ourselves
-	OB_SUFFIX=( ${OB_ALPHA[@]} )
-	OB_MAX=52
+    # for basic creation, we create the names ourselves
+    OB_SUFFIX=( ${OB_ALPHA[@]} )
+    OB_MAX=52
 fi
 
 # create arrays of data and meta servers and use them to build
@@ -329,33 +329,33 @@ fi
 row=1
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	for j in `seq 1 $OB_OFS_PER_INSTANCE`
-	do
-		this_pvfs2_server=$OB_OFS_NAME${OB_SUFFIX[i]}:${port[$j]}
-		case ${OB_LAYOUT[$(( row +  j - 1 ))]} in
-			b) OB_DATA_ARRAY+=($this_pvfs2_server)
-			   OB_META_ARRAY+=($this_pvfs2_server);;
-			m) OB_META_ARRAY+=($this_pvfs2_server);;
-			d) OB_DATA_ARRAY+=($this_pvfs2_server);;
-			*) echo "ERROR"
-			   echo "server "$i" instance "$j
-			   echo ${OB_LAYOUT[$(( row +  j - 1 ))]}
-			   ob_cleanup;;
-		esac
-	done
-	row=$((( row * j ) + 1 ))
+    for j in `seq 1 $OB_OFS_PER_INSTANCE`
+    do
+        this_pvfs2_server=$OB_OFS_NAME${OB_SUFFIX[i]}:${port[$j]}
+        case ${OB_LAYOUT[$(( row +  j - 1 ))]} in
+            b) OB_DATA_ARRAY+=($this_pvfs2_server)
+               OB_META_ARRAY+=($this_pvfs2_server);;
+            m) OB_META_ARRAY+=($this_pvfs2_server);;
+            d) OB_DATA_ARRAY+=($this_pvfs2_server);;
+            *) echo "ERROR"
+               echo "server "$i" instance "$j
+               echo ${OB_LAYOUT[$(( row +  j - 1 ))]}
+               ob_cleanup;;
+        esac
+    done
+    row=$((( row * j ) + 1 ))
 done
 
 # add the list of data servers to the pvfs2-genconfig command
 for i in "${OB_DATA_ARRAY[@]}"
 do
-	OB_OFS_CONFIG="$OB_OFS_CONFIG"`echo -n $i`","
+    OB_OFS_CONFIG="$OB_OFS_CONFIG"`echo -n $i`","
 done
 # chop off the trailing comma and get ready for the meta list
 OB_OFS_CONFIG=`echo ${OB_OFS_CONFIG%?}`" --metaspec "
 for i in "${OB_META_ARRAY[@]}"
 do
-	OB_OFS_CONFIG="$OB_OFS_CONFIG"`echo -n $i`","
+    OB_OFS_CONFIG="$OB_OFS_CONFIG"`echo -n $i`","
 done
 # chop off the trailing comma and finish building the command
 OB_OFS_CONFIG=`echo ${OB_OFS_CONFIG%?}`" --filesystem-dbmaxsize ""$OB_DBMAXSIZE"
@@ -376,61 +376,61 @@ OB_COLLOCATION="collocated"
 # function to create a compact placement policy
 # usage: create_policy <policy_name> <vm_count>
 create_policy() {
-	policy_name=$1
-	vm_count=$2
+    policy_name=$1
+    vm_count=$2
 
-	# create the policy
-	OB_CMD="$OB_POLICY_CREATE $OB_POLICY_TYPE $policy_name"
-	OB_CMD+=" --collocation=$OB_COLLOCATION"
-	OB_CMD+=" --vm-count=$vm_count"
-	#echo $OB_CMD
-	eval $OB_CMD
-	if [ "$?" -gt "0" ]
-	then
-		echo "creation of "$policy_name" failed."
-		ob_cleanup
-	fi
+    # create the policy
+    OB_CMD="$OB_POLICY_CREATE $OB_POLICY_TYPE $policy_name"
+    OB_CMD+=" --collocation=$OB_COLLOCATION"
+    OB_CMD+=" --vm-count=$vm_count"
+    #echo $OB_CMD
+    eval $OB_CMD
+    if [ "$?" -gt "0" ]
+    then
+        echo "creation of "$policy_name" failed."
+        ob_cleanup
+    fi
 }
 
 if [ -n "$OB_PLACEMENT_POLICY" ] && [ "$OB_PLACEMENT_POLICY" != "NONE" ]
 then
-	ts=$(date "+%Y%m%d-%H%M%S")
-	OB_POLICY_NAME="${OB_POLICY_PREFIX}-${ts}"
+    ts=$(date "+%Y%m%d-%H%M%S")
+    OB_POLICY_NAME="${OB_POLICY_PREFIX}-${ts}"
 
-	if [ "$OB_PLACEMENT_POLICY" == "CLIENTS" ]
-	then
-		create_policy $OB_POLICY_NAME $OB_IO500_CLIENTS
-		OB_CLIENT_POLICY_OPTS=" --resource-policies=$OB_POLICY_NAME"
-		OB_SERVER_POLICY_OPTS=""
-	elif [ "$OB_PLACEMENT_POLICY" == "SERVERS" ]
-	then
-		create_policy $OB_POLICY_NAME $OB_OFS_SERVERS
-		OB_SERVER_POLICY_OPTS=" --resource-policies=$OB_POLICY_NAME"
-		OB_CLIENT_POLICY_OPTS=""
-	elif [ "$OB_PLACEMENT_POLICY" == "SEPARATE" ]
-	then
-		OB_SERVER_POLICY_NAME="${OB_POLICY_NAME}-servers"
-		OB_CLIENT_POLICY_NAME="${OB_POLICY_NAME}-clients"
-		create_policy $OB_SERVER_POLICY_NAME $OB_OFS_SERVERS
-		create_policy $OB_CLIENT_POLICY_NAME $OB_IO500_CLIENTS
-		OB_SERVER_POLICY_OPTS=" --resource-policies=$OB_SERVER_POLICY_NAME"
-		OB_CLIENT_POLICY_OPTS=" --resource-policies=$OB_CLIENT_POLICY_NAME"
-	elif [ "$OB_PLACEMENT_POLICY" == "SHARED" ]
-	then
-		# TODO: implement shared policies
-		echo "Support for a shared placement policy will be added in a future update."
-		echo "For now, please choose NONE, CLIENTS, or SERVERS."
-		ob_cleanup
-	fi
+    if [ "$OB_PLACEMENT_POLICY" == "CLIENTS" ]
+    then
+        create_policy $OB_POLICY_NAME $OB_IO500_CLIENTS
+        OB_CLIENT_POLICY_OPTS=" --resource-policies=$OB_POLICY_NAME"
+        OB_SERVER_POLICY_OPTS=""
+    elif [ "$OB_PLACEMENT_POLICY" == "SERVERS" ]
+    then
+        create_policy $OB_POLICY_NAME $OB_OFS_SERVERS
+        OB_SERVER_POLICY_OPTS=" --resource-policies=$OB_POLICY_NAME"
+        OB_CLIENT_POLICY_OPTS=""
+    elif [ "$OB_PLACEMENT_POLICY" == "SEPARATE" ]
+    then
+        OB_SERVER_POLICY_NAME="${OB_POLICY_NAME}-servers"
+        OB_CLIENT_POLICY_NAME="${OB_POLICY_NAME}-clients"
+        create_policy $OB_SERVER_POLICY_NAME $OB_OFS_SERVERS
+        create_policy $OB_CLIENT_POLICY_NAME $OB_IO500_CLIENTS
+        OB_SERVER_POLICY_OPTS=" --resource-policies=$OB_SERVER_POLICY_NAME"
+        OB_CLIENT_POLICY_OPTS=" --resource-policies=$OB_CLIENT_POLICY_NAME"
+    elif [ "$OB_PLACEMENT_POLICY" == "SHARED" ]
+    then
+        # TODO: implement shared policies
+        echo "Support for a shared placement policy will be added in a future update."
+        echo "For now, please choose NONE, CLIENTS, or SERVERS."
+        ob_cleanup
+    fi
 
-	# set generic policy options for instance creation
-	OB_POLICY_OPTS=" --maintenance-policy=TERMINATE"
-	OB_POLICY_OPTS+=" --no-restart-on-failure"
+    # set generic policy options for instance creation
+    OB_POLICY_OPTS=" --maintenance-policy=TERMINATE"
+    OB_POLICY_OPTS+=" --no-restart-on-failure"
 
-	# TODO: add cleanup message/instructions for policy to ob_cleanup
+    # TODO: add cleanup message/instructions for policy to ob_cleanup
 else
-	OB_POLICY_NAME=""
-	OB_POLICY_OPTS=""
+    OB_POLICY_NAME=""
+    OB_POLICY_OPTS=""
 fi
 
 echo ""
@@ -444,146 +444,146 @@ TYPE_IO500_CLIENT=1
 #
 # upon completion, instances may not be in the RUNNING state yet
 basic_create() {
-	num_instances=$1
-	instance_type=$2
+    num_instances=$1
+    instance_type=$2
 
-	if [ $instance_type == $TYPE_OFS_SERVER ]
-	then
-		instance_name="$OB_OFS_NAME"
-		machine_type_arg="$OB_OFS_MACHINE_ARG"
-		metadata_arg="$OB_SERVER_METADATA_ARG"
-	elif [ $instance_type == $TYPE_IO500_CLIENT ]
-	then
-		instance_name="$OB_IO500_NAME"
-		machine_type_arg="$OB_IO500_MACHINE_ARG"
-		metadata_arg="$OB_CLIENT_METADATA_ARG"
-	else
-		echo "invalid instance type: ${instance_type}"
-		ob_cleanup
-	fi
+    if [ $instance_type == $TYPE_OFS_SERVER ]
+    then
+        instance_name="$OB_OFS_NAME"
+        machine_type_arg="$OB_OFS_MACHINE_ARG"
+        metadata_arg="$OB_SERVER_METADATA_ARG"
+    elif [ $instance_type == $TYPE_IO500_CLIENT ]
+    then
+        instance_name="$OB_IO500_NAME"
+        machine_type_arg="$OB_IO500_MACHINE_ARG"
+        metadata_arg="$OB_CLIENT_METADATA_ARG"
+    else
+        echo "invalid instance type: ${instance_type}"
+        ob_cleanup
+    fi
 
-	for i in `seq 1 $num_instances`
-	do
-		OB_CMD="$OB_CREATE""$instance_name""${OB_SUFFIX[i]}"
-		OB_CMD="$OB_CMD""$OB_IMAGE_ARG""$machine_type_arg""$OB_SCOPE_ARG"
-		OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
-		OB_CMD="$OB_CMD""$OB_THREADS_ARG"
-		OB_CMD="$OB_CMD""$OB_STARTUP_SCRIPT_ARG"
-		OB_CMD="$OB_CMD""$metadata_arg"
-		OB_CMD="$OB_CMD"" --no-user-output-enabled"
-		OB_CMD="$OB_CMD"" --async"
+    for i in `seq 1 $num_instances`
+    do
+        OB_CMD="$OB_CREATE""$instance_name""${OB_SUFFIX[i]}"
+        OB_CMD="$OB_CMD""$OB_IMAGE_ARG""$machine_type_arg""$OB_SCOPE_ARG"
+        OB_CMD="$OB_CMD""$OB_NET_INT""$OB_NET_PERF"
+        OB_CMD="$OB_CMD""$OB_THREADS_ARG"
+        OB_CMD="$OB_CMD""$OB_STARTUP_SCRIPT_ARG"
+        OB_CMD="$OB_CMD""$metadata_arg"
+        OB_CMD="$OB_CMD"" --no-user-output-enabled"
+        OB_CMD="$OB_CMD"" --async"
 
-		if [ $instance_type == $TYPE_OFS_SERVER ]
-		then
-			for j in `seq 1 $OB_SSD_NUM`
-			do
-				OB_CMD="$OB_CMD""$OB_SSD_ARG"
-			done
-		fi
+        if [ $instance_type == $TYPE_OFS_SERVER ]
+        then
+            for j in `seq 1 $OB_SSD_NUM`
+            do
+                OB_CMD="$OB_CMD""$OB_SSD_ARG"
+            done
+        fi
 
-		if [ -n "$OB_POLICY_NAME" ]
-		then
-			if [ $instance_type == $TYPE_OFS_SERVER ]
-			then
-				if [ -n "$OB_SERVER_POLICY_OPTS" ]
-				then
-					OB_CMD="$OB_CMD""$OB_SERVER_POLICY_OPTS""$OB_POLICY_OPTS"
-				fi
-			else
-				if [ -n "$OB_CLIENT_POLICY_OPTS" ]
-				then
-					OB_CMD="$OB_CMD""$OB_CLIENT_POLICY_OPTS""$OB_POLICY_OPTS"
-				fi
-			fi
-		fi
+        if [ -n "$OB_POLICY_NAME" ]
+        then
+            if [ $instance_type == $TYPE_OFS_SERVER ]
+            then
+                if [ -n "$OB_SERVER_POLICY_OPTS" ]
+                then
+                    OB_CMD="$OB_CMD""$OB_SERVER_POLICY_OPTS""$OB_POLICY_OPTS"
+                fi
+            else
+                if [ -n "$OB_CLIENT_POLICY_OPTS" ]
+                then
+                    OB_CMD="$OB_CMD""$OB_CLIENT_POLICY_OPTS""$OB_POLICY_OPTS"
+                fi
+            fi
+        fi
 
-		# echo $OB_CMD
-		eval $OB_CMD
-		if [ "$?" -gt "0" ]
-		then
-			echo "creation of ""$instance_name""${OB_SUFFIX[i]}"" failed."
-			ob_cleanup
-		fi
-	done
+        # echo $OB_CMD
+        eval $OB_CMD
+        if [ "$?" -gt "0" ]
+        then
+            echo "creation of ""$instance_name""${OB_SUFFIX[i]}"" failed."
+            ob_cleanup
+        fi
+    done
 }
 
 # function to create instances using the python bulk api via external script
 #
 # if successful, instances will be in RUNNING state upon completion
 bulk_create() {
-	BULK_CREATE_FILENAME="bulk_create.py"
-	OB_CMD="python $BULK_CREATE_FILENAME"
-	OB_CMD+=" --project=$OB_PROJECT --region=$OB_REGION --zone=$OB_ZONE"
-	OB_CMD+=" --image=$OB_IMAGE --scopes=$OB_SCOPE"
-	OB_CMD+=" --num-servers=$OB_OFS_SERVERS --num-clients=$OB_IO500_CLIENTS"
-	OB_CMD+=" --server-type=$OB_OFS_MACHINE --client-type=$OB_IO500_MACHINE"
-	OB_CMD+=" --server-prefix=$OB_OFS_NAME --client-prefix=$OB_IO500_NAME"
-	OB_CMD+=" --server-metadata=$OB_SERVER_METADATA"
-	OB_CMD+=" --client-metadata=$OB_CLIENT_METADATA"
-	OB_CMD+=" --num-ssd-per-server=$OB_SSD_NUM"
-	OB_CMD+=" --threads-per-core=$OB_THREADS_PER_CORE"
+    BULK_CREATE_FILENAME="bulk_create.py"
+    OB_CMD="python $BULK_CREATE_FILENAME"
+    OB_CMD+=" --project=$OB_PROJECT --region=$OB_REGION --zone=$OB_ZONE"
+    OB_CMD+=" --image=$OB_IMAGE --scopes=$OB_SCOPE"
+    OB_CMD+=" --num-servers=$OB_OFS_SERVERS --num-clients=$OB_IO500_CLIENTS"
+    OB_CMD+=" --server-type=$OB_OFS_MACHINE --client-type=$OB_IO500_MACHINE"
+    OB_CMD+=" --server-prefix=$OB_OFS_NAME --client-prefix=$OB_IO500_NAME"
+    OB_CMD+=" --server-metadata=$OB_SERVER_METADATA"
+    OB_CMD+=" --client-metadata=$OB_CLIENT_METADATA"
+    OB_CMD+=" --num-ssd-per-server=$OB_SSD_NUM"
+    OB_CMD+=" --threads-per-core=$OB_THREADS_PER_CORE"
 
-	if [ -n "${OB_SUBNET}" ]
-	then
-		OB_CMD+=" --subnet=$OB_SUBNET"
-	fi
-	if [ -n "${OB_POLICY_NAME}" ]
-	then
-		if [ "$OB_PLACEMENT_POLICY" == "SERVERS" ]
-		then
-			OB_CMD+=" --server-policy=$OB_POLICY_NAME"
-		elif [ "$OB_PLACEMENT_POLICY" == "CLIENTS" ]
-		then
-			OB_CMD+=" --client-policy=$OB_POLICY_NAME"
-		elif [ "$OB_PLACEMENT_POLICY" == "SEPARATE" ]
-		then
-			OB_CMD+=" --server-policy=$OB_SERVER_POLICY_NAME"
-			OB_CMD+=" --client-policy=$OB_CLIENT_POLICY_NAME"
-		fi
-	fi
-	if [ -n "${OB_NIC_TYPE}" ]
-	then
-		OB_CMD+=" --nic-type=$OB_NIC_TYPE"
-	fi
-	if [ "$OB_USE_TIER1_NET" -gt "0" ]
-	then
-		OB_CMD+=" --enable-tier1-networking"
-	fi
-	if [ -n "${OB_STARTUP_SCRIPT}" ]
-	then
-		OB_CMD+=" --startup-script=$OB_STARTUP_SCRIPT"
-	fi
+    if [ -n "${OB_SUBNET}" ]
+    then
+        OB_CMD+=" --subnet=$OB_SUBNET"
+    fi
+    if [ -n "${OB_POLICY_NAME}" ]
+    then
+        if [ "$OB_PLACEMENT_POLICY" == "SERVERS" ]
+        then
+            OB_CMD+=" --server-policy=$OB_POLICY_NAME"
+        elif [ "$OB_PLACEMENT_POLICY" == "CLIENTS" ]
+        then
+            OB_CMD+=" --client-policy=$OB_POLICY_NAME"
+        elif [ "$OB_PLACEMENT_POLICY" == "SEPARATE" ]
+        then
+            OB_CMD+=" --server-policy=$OB_SERVER_POLICY_NAME"
+            OB_CMD+=" --client-policy=$OB_CLIENT_POLICY_NAME"
+        fi
+    fi
+    if [ -n "${OB_NIC_TYPE}" ]
+    then
+        OB_CMD+=" --nic-type=$OB_NIC_TYPE"
+    fi
+    if [ "$OB_USE_TIER1_NET" -gt "0" ]
+    then
+        OB_CMD+=" --enable-tier1-networking"
+    fi
+    if [ -n "${OB_STARTUP_SCRIPT}" ]
+    then
+        OB_CMD+=" --startup-script=$OB_STARTUP_SCRIPT"
+    fi
 
-	# echo $OB_CMD
-	eval $OB_CMD
-	if [ "$?" -gt "0" ]
-	then
-		echo "creation of instances via bulk-create failed."
-		ob_cleanup
-	fi
+    # echo $OB_CMD
+    eval $OB_CMD
+    if [ "$?" -gt "0" ]
+    then
+        echo "creation of instances via bulk-create failed."
+        ob_cleanup
+    fi
 }
 
 # create server and client instances
 if [ "$OB_USE_BULK_CREATE" -gt "0" ]
 then
-	bulk_create
+    bulk_create
 else
-	basic_create $OB_OFS_SERVERS $TYPE_OFS_SERVER
-	basic_create $OB_IO500_CLIENTS $TYPE_IO500_CLIENT
+    basic_create $OB_OFS_SERVERS $TYPE_OFS_SERVER
+    basic_create $OB_IO500_CLIENTS $TYPE_IO500_CLIENT
 fi
 
 # function to wait for a launched instance to reach the RUNNING state
 wait_for_instance() {
-	instance_name=$1
-	instance_status=""
+    instance_name=$1
+    instance_status=""
 
-	echo -n "Waiting for instance ${instance_name}... "
-	while [ "$instance_status" != "RUNNING" ]
-	do
-		sleep $OB_SLEEP
-		instance_status=`gcloud compute instances describe $instance_name --format='get(status)'`
-	done
-	echo "done."
+    echo -n "Waiting for instance ${instance_name}... "
+    while [ "$instance_status" != "RUNNING" ]
+    do
+        sleep $OB_SLEEP
+        instance_status=`gcloud compute instances describe $instance_name --format='get(status)'`
+    done
+    echo "done."
 }
 
 # associative array for host names to ip addrs
@@ -592,47 +592,47 @@ declare -A OB_IN_ETC_HOSTS # internal addrs
 
 # function to collect an instance's external and internal IP addresses
 collect_ips() {
-	instance_name=$1
+    instance_name=$1
 
-	OB_EX_ETC_HOSTS[$instance_name]=`gcloud compute instances describe $instance_name --format='get(networkInterfaces[0].accessConfigs[0].natIP)'`
-	if [ "$?" -gt "0" ]
-	then
-		echo "no external ip for ${instance_name}."
-		ob_cleanup
-	fi
+    OB_EX_ETC_HOSTS[$instance_name]=`gcloud compute instances describe $instance_name --format='get(networkInterfaces[0].accessConfigs[0].natIP)'`
+    if [ "$?" -gt "0" ]
+    then
+        echo "no external ip for ${instance_name}."
+        ob_cleanup
+    fi
 
-	OB_IN_ETC_HOSTS[$instance_name]=`gcloud compute instances describe $instance_name --format='get(networkInterfaces[0].networkIP)'`
-	if [ "$?" -gt "0" ]
-	then
-		echo "no internal ip for ${instance_name}."
-		ob_cleanup
-	fi
+    OB_IN_ETC_HOSTS[$instance_name]=`gcloud compute instances describe $instance_name --format='get(networkInterfaces[0].networkIP)'`
+    if [ "$?" -gt "0" ]
+    then
+        echo "no internal ip for ${instance_name}."
+        ob_cleanup
+    fi
 }
 
 # collect the servers' external and internal IP addrs once they lanuch
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	instance_name="$OB_OFS_NAME""${OB_SUFFIX[i]}"
+    instance_name="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 
-	if [ "$OB_USE_BULK_CREATE" -eq "0" ]
-	then
-		# if instances were created individually, they may not be RUNNING yet
-		wait_for_instance $instance_name
-	fi
-	collect_ips $instance_name
+    if [ "$OB_USE_BULK_CREATE" -eq "0" ]
+    then
+        # if instances were created individually, they may not be RUNNING yet
+        wait_for_instance $instance_name
+    fi
+    collect_ips $instance_name
 done
 
 # collect the clients' external and internal IP addrs once they launch
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	instance_name="$OB_IO500_NAME""${OB_SUFFIX[i]}"
+    instance_name="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 
-	if [ "$OB_USE_BULK_CREATE" -eq "0" ]
-	then
-		# if instances were created individually, they may not be RUNNING yet
-		wait_for_instance $instance_name
-	fi
-	collect_ips $instance_name
+    if [ "$OB_USE_BULK_CREATE" -eq "0" ]
+    then
+        # if instances were created individually, they may not be RUNNING yet
+        wait_for_instance $instance_name
+    fi
+    collect_ips $instance_name
 done
 
 echo ""
@@ -641,21 +641,21 @@ echo ""
 echo -n "Testing connectivity to port 22 on orangefs servers. "
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_TRYS=$OB_ATTEMPTS
-	while [ "$OB_TRYS" -gt "0" ] && \
-		! nc -z ${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]} 22
-	do
-		sleep $OB_SLEEP
-		OB_TRYS=$(( OB_TRYS - 1 ))
-		if [ "$OB_TRYS" -eq "0" ]
-		then
-			echo -e "\nno response from " \
-			"${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}" \
-			"on port 22."
-			ob_cleanup
-		fi
-	done
-	echo -n "."
+    OB_TRYS=$OB_ATTEMPTS
+    while [ "$OB_TRYS" -gt "0" ] && \
+        ! nc -z ${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]} 22
+    do
+        sleep $OB_SLEEP
+        OB_TRYS=$(( OB_TRYS - 1 ))
+        if [ "$OB_TRYS" -eq "0" ]
+        then
+            echo -e "\nno response from " \
+            "${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}" \
+            "on port 22."
+            ob_cleanup
+        fi
+    done
+    echo -n "."
 done
 echo " done."
 
@@ -663,194 +663,194 @@ echo -n "add ofs server internal IP addrs to each server's host file. "
 # make a local file of host lines to add to all the cloud servers.
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
-	echo "$OB_IN_IP"" ""$OB_HOST" >> hostfile
+    OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
+    echo "$OB_IN_IP"" ""$OB_HOST" >> hostfile
 done
 # append the local host file onto the end of all the server /etc/host files.
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
-	# As we run tests over and over, IP addresses will end up
-	# getting reused. We want to run tests without having to
-	# do a bunch of .ssh/known_hosts maintenance, we'll turn
-	# off host key checking and fling the WARNING message to dev null.
-	scp -o "StrictHostKeyChecking no" \
-		hostfile "$OB_EX_IP": > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nscp host file to :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo sh -c \'cat hostfile \>\> /etc/hosts\' > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nappend hostfile on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	echo -n "."
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
+    # As we run tests over and over, IP addresses will end up
+    # getting reused. We want to run tests without having to
+    # do a bunch of .ssh/known_hosts maintenance, we'll turn
+    # off host key checking and fling the WARNING message to dev null.
+    scp -o "StrictHostKeyChecking no" \
+        hostfile "$OB_EX_IP": > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nscp host file to :"$OB_HOST": failed."
+        ob_cleanup
+    fi
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        sudo sh -c \'cat hostfile \>\> /etc/hosts\' > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nappend hostfile on :"$OB_HOST": failed."
+        ob_cleanup
+    fi
+    echo -n "."
 done
 echo " done."
 
 # One SSD per pvfs2-server process or two SSDs per process if separate
 # IO and metadata.
 if [ $(( OB_SSD_NUM / OB_OFS_PER_INSTANCE )) -eq "1" ] ||
-	[ $(( OB_SSD_NUM / OB_OFS_PER_INSTANCE )) -eq "2" -a \
-		"$OB_SEPARATE_DATA_META" -eq "1" ]
+    [ $(( OB_SSD_NUM / OB_OFS_PER_INSTANCE )) -eq "2" -a \
+        "$OB_SEPARATE_DATA_META" -eq "1" ]
 then
-	for i in `seq 1 $OB_OFS_SERVERS`
-	do
-		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
-		OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
-		for j in `seq 1 $OB_SSD_NUM`
-		do
-			OB_LABEL="parted /dev/nvme0n"$j" --script mklabel gpt"
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-				sudo sh -c \'"$OB_LABEL"\' > /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "labeling failed "$OB_HOST" "$j
-				ob_cleanup
-			fi
+    for i in `seq 1 $OB_OFS_SERVERS`
+    do
+        OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+        OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
+        for j in `seq 1 $OB_SSD_NUM`
+        do
+            OB_LABEL="parted /dev/nvme0n"$j" --script mklabel gpt"
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+                sudo sh -c \'"$OB_LABEL"\' > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "labeling failed "$OB_HOST" "$j
+                ob_cleanup
+            fi
 
-			OB_PARTITION="parted -a optimal /dev/nvme0n"$j
-			OB_PARTITION=$OB_PARTITION" --script mkpart"
-			OB_PARTITION=$OB_PARTITION" primary ext4 2048 375GB"
-			
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-				sudo sh -c \'"$OB_PARTITION"\' > /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "Partitioning failed "$OB_HOST" "$j
-				ob_cleanup
-			fi
+            OB_PARTITION="parted -a optimal /dev/nvme0n"$j
+            OB_PARTITION=$OB_PARTITION" --script mkpart"
+            OB_PARTITION=$OB_PARTITION" primary ext4 2048 375GB"
 
-			OB_MKFS="mkfs.ext4 -F /dev/nvme0n"$j"p1"
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-				sudo sh -c \'"$OB_MKFS"\' > /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "mkfs failed "$OB_HOST" "$j
-				ob_cleanup
-			fi
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+                sudo sh -c \'"$OB_PARTITION"\' > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "Partitioning failed "$OB_HOST" "$j
+                ob_cleanup
+            fi
 
-			if [ "$OB_SEPARATE_DATA_META" -eq "1" ]
-			then
-				if [ $(( j % 2 )) -eq 0 ]
-				then
-					index=$(( j / 2 ))
-					mount_point="$OB_MOUNT_POINT""${port[$index]}"
-					mount_point="$mount_point""/meta"
-				else
-					index=$((( j + 1) / 2 ))
-					mount_point="$OB_MOUNT_POINT""${port[$index]}"
-					mount_point="$mount_point""/data"
-				fi
-			else
-				mount_point="$OB_MOUNT_POINT""${port[$j]}"
-			fi
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-			sudo sh -c \'mkdir -m 777 -p "$mount_point"\' \
-					> /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "mkdir mount point "$OB_HOST" "$j
-				ob_cleanup
-			fi
+            OB_MKFS="mkfs.ext4 -F /dev/nvme0n"$j"p1"
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+                sudo sh -c \'"$OB_MKFS"\' > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "mkfs failed "$OB_HOST" "$j
+                ob_cleanup
+            fi
 
-			OB_MOUNT="mount /dev/nvme0n"$j"p1 ""$mount_point"
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-				sudo sh -c \'"$OB_MOUNT"\' > /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "mount failed "$OB_HOST" "$j
-				ob_cleanup
-			fi
-			echo "SSD #"$j" mounted on "$OB_HOST
+            if [ "$OB_SEPARATE_DATA_META" -eq "1" ]
+            then
+                if [ $(( j % 2 )) -eq 0 ]
+                then
+                    index=$(( j / 2 ))
+                    mount_point="$OB_MOUNT_POINT""${port[$index]}"
+                    mount_point="$mount_point""/meta"
+                else
+                    index=$((( j + 1) / 2 ))
+                    mount_point="$OB_MOUNT_POINT""${port[$index]}"
+                    mount_point="$mount_point""/data"
+                fi
+            else
+                mount_point="$OB_MOUNT_POINT""${port[$j]}"
+            fi
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+            sudo sh -c \'mkdir -m 777 -p "$mount_point"\' \
+                    > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "mkdir mount point "$OB_HOST" "$j
+                ob_cleanup
+            fi
 
-			# add to /etc/fstab for automount on reboot
-			index=$((j-1))
-			device="/dev/disk/by-id/google-local-nvme-ssd-${index}-part1"
-			cmd="echo UUID=\$(blkid -s UUID -o value ${device})"
-			cmd+=" ${mount_point} ext4 discard,defaults,nofail 0 2"
-			cmd+=" | sudo tee -a /etc/fstab"
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-				sudo sh -c \'${cmd}\' > /dev/null 2>&1
-			echo "SSD #${j} added to /etc/fstab for automount on reboot"
-		done
-	done
+            OB_MOUNT="mount /dev/nvme0n"$j"p1 ""$mount_point"
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+                sudo sh -c \'"$OB_MOUNT"\' > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "mount failed "$OB_HOST" "$j
+                ob_cleanup
+            fi
+            echo "SSD #"$j" mounted on "$OB_HOST
+
+            # add to /etc/fstab for automount on reboot
+            index=$((j-1))
+            device="/dev/disk/by-id/google-local-nvme-ssd-${index}-part1"
+            cmd="echo UUID=\$(blkid -s UUID -o value ${device})"
+            cmd+=" ${mount_point} ext4 discard,defaults,nofail 0 2"
+            cmd+=" | sudo tee -a /etc/fstab"
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+                sudo sh -c \'${cmd}\' > /dev/null 2>&1
+            echo "SSD #${j} added to /etc/fstab for automount on reboot"
+        done
+    done
 else
-	# More than one SSD per orangefs server.
-	for i in `seq 1 $OB_OFS_SERVERS`
-	do
-		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
-		OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
+    # More than one SSD per orangefs server.
+    for i in `seq 1 $OB_OFS_SERVERS`
+    do
+        OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+        OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
 
-		ssd_per_ofs=$(( OB_SSD_NUM / OB_OFS_PER_INSTANCE))
-		ssd_start=1
-		ssd_end=$ssd_per_ofs
-		for j in `seq 1 $OB_OFS_PER_INSTANCE`
-		do
+        ssd_per_ofs=$(( OB_SSD_NUM / OB_OFS_PER_INSTANCE))
+        ssd_start=1
+        ssd_end=$ssd_per_ofs
+        for j in `seq 1 $OB_OFS_PER_INSTANCE`
+        do
 
-			echo "mount md"$j" on "$OB_HOST
-			OB_MDADM="mdadm --create /dev/md"$j
-			OB_MDADM="$OB_MDADM"" --level=0 --raid-devices="
-			OB_MDADM="$OB_MDADM""$ssd_per_ofs"
+            echo "mount md"$j" on "$OB_HOST
+            OB_MDADM="mdadm --create /dev/md"$j
+            OB_MDADM="$OB_MDADM"" --level=0 --raid-devices="
+            OB_MDADM="$OB_MDADM""$ssd_per_ofs"
 
-			for k in `seq $ssd_start $ssd_end`
-			do
-				OB_MDADM="$OB_MDADM"" $OB_SSD_DEV""$k"
-			done
-			ssd_start=$(( ssd_start + ssd_per_ofs ))
-			ssd_end=$(( ssd_end + ssd_per_ofs ))
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-				sudo sh -c \'"$OB_MDADM"\' > /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "mdadm failed for "$OB_HOST" "$ssd_start
-				ob_cleanup
-			fi
+            for k in `seq $ssd_start $ssd_end`
+            do
+                OB_MDADM="$OB_MDADM"" $OB_SSD_DEV""$k"
+            done
+            ssd_start=$(( ssd_start + ssd_per_ofs ))
+            ssd_end=$(( ssd_end + ssd_per_ofs ))
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+                sudo sh -c \'"$OB_MDADM"\' > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "mdadm failed for "$OB_HOST" "$ssd_start
+                ob_cleanup
+            fi
 
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
-				sh -c \'mkfs.ext4 -F /dev/md"$j"\' \
-					> /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "mkfs failed for "$OB_HOST" "$j
-				ob_cleanup
-			fi
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
+                sh -c \'mkfs.ext4 -F /dev/md"$j"\' \
+                    > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "mkfs failed for "$OB_HOST" "$j
+                ob_cleanup
+            fi
 
-			mount_point="$OB_MOUNT_POINT""${port[$j]}"
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-				sudo sh -c \'mkdir "$mount_point"\' \
-					> /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "mkdir mount point "$OB_HOST" "$j
-				ob_cleanup
-			fi
+            mount_point="$OB_MOUNT_POINT""${port[$j]}"
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+                sudo sh -c \'mkdir "$mount_point"\' \
+                    > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "mkdir mount point "$OB_HOST" "$j
+                ob_cleanup
+            fi
 
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
-				sh -c \'mount /dev/md"$j" \
-					 "$mount_point"\' > /dev/null 2>&1
-			if [ "$?" -gt "0" ]
-			then
-				echo "mount failed "$OB_HOST" "$j
-				ob_cleanup
-			fi
-			echo "RAID mounted on "$OB_HOST" "$j
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
+                sh -c \'mount /dev/md"$j" \
+                     "$mount_point"\' > /dev/null 2>&1
+            if [ "$?" -gt "0" ]
+            then
+                echo "mount failed "$OB_HOST" "$j
+                ob_cleanup
+            fi
+            echo "RAID mounted on "$OB_HOST" "$j
 
-			# add to /etc/fstab for automount on reboot
-			cmd="echo UUID=\$(blkid -s UUID -o value /dev/md${j})"
-			cmd+=" ${mount_point} ext4 discard,defaults,nofail 0 2"
-			cmd+=" | sudo tee -a /etc/fstab"
-			ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-				sudo sh -c \'${cmd}\' > /dev/null 2>&1
-			echo "md${j} array added to /etc/fstab for automount on reboot"
-		done
-	done
+            # add to /etc/fstab for automount on reboot
+            cmd="echo UUID=\$(blkid -s UUID -o value /dev/md${j})"
+            cmd+=" ${mount_point} ext4 discard,defaults,nofail 0 2"
+            cmd+=" | sudo tee -a /etc/fstab"
+            ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+                sudo sh -c \'${cmd}\' > /dev/null 2>&1
+            echo "md${j} array added to /etc/fstab for automount on reboot"
+        done
+    done
 fi
 
 # change the DataStorageSpace and MetadataStorageSpace
@@ -859,29 +859,29 @@ fi
 echo -n "edit config file mount points. "
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
-	for j in `seq 1 $OB_OFS_PER_INSTANCE`
-	do
-		mount_point="$OB_MOUNT_POINT""${port[$j]}"
-		datastorage=$mount_point/data
-		metastorage=$mount_point/meta
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
+    for j in `seq 1 $OB_OFS_PER_INSTANCE`
+    do
+        mount_point="$OB_MOUNT_POINT""${port[$j]}"
+        datastorage=$mount_point/data
+        metastorage=$mount_point/meta
 
-		escape_slashes=$(echo $datastorage | sed 's/\//\\\//g')
-		sed -i 's/D.*'$OB_HOST'.*'${port[$j]}'/DataStorageSpace '$escape_slashes'/' orangefs.conf
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\ncan't edit data storage :"$OB_HOST":"$j":"
-			ob_cleanup
-		fi
-		escape_slashes=$(echo $metastorage | sed 's/\//\\\//g')
-		sed -i 's/M.*'$OB_HOST'.*'${port[$j]}'/MetadataStorageSpace '$escape_slashes'/' orangefs.conf
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\ncan't edit meta storage :"$OB_HOST":"$j":"
-			ob_cleanup
-		fi
-	done
+        escape_slashes=$(echo $datastorage | sed 's/\//\\\//g')
+        sed -i 's/D.*'$OB_HOST'.*'${port[$j]}'/DataStorageSpace '$escape_slashes'/' orangefs.conf
+        if [ "$?" -gt "0" ]
+        then
+            echo -e "\ncan't edit data storage :"$OB_HOST":"$j":"
+            ob_cleanup
+        fi
+        escape_slashes=$(echo $metastorage | sed 's/\//\\\//g')
+        sed -i 's/M.*'$OB_HOST'.*'${port[$j]}'/MetadataStorageSpace '$escape_slashes'/' orangefs.conf
+        if [ "$?" -gt "0" ]
+        then
+            echo -e "\ncan't edit meta storage :"$OB_HOST":"$j":"
+            ob_cleanup
+        fi
+    done
 done
 echo " done."
 echo
@@ -889,53 +889,53 @@ echo
 echo -n "start the servers. "
 for i in `seq 1 $OB_OFS_SERVERS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
-	for j in `seq 1 $OB_OFS_PER_INSTANCE`
-	do
-		# deduce my whacky alias from the autogenned conf file.
-		me=`grep "^	Alias " "$OB_OFS_CONFIG_FILE_NAME" | \
-			grep $OB_HOST | \
-			sed $j'q;d' | \
-			awk '{ print $2 }'`
-		# vague sanity check...
-		if [ `grep Alias "$OB_OFS_CONFIG_FILE_NAME" | \
-			grep "$me" | \
-			wc -l` -ne "1" ]
-		then
-			echo -e "\nI don't know who I am :"$me":"
-			ob_cleanup
-		fi
-		# copy over the config file.
-		scp -o "StrictHostKeyChecking no" "$OB_OFS_CONFIG_FILE_NAME" \
-			"$OB_EX_IP": > /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\nscp ofs config to :"$OB_HOST": failed."
-			ob_cleanup
-		fi
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_OFS_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_OFS_NAME""${OB_SUFFIX[i]}"
+    for j in `seq 1 $OB_OFS_PER_INSTANCE`
+    do
+        # deduce my whacky alias from the autogenned conf file.
+        me=`grep "^	Alias " "$OB_OFS_CONFIG_FILE_NAME" | \
+            grep $OB_HOST | \
+            sed $j'q;d' | \
+            awk '{ print $2 }'`
+        # vague sanity check...
+        if [ `grep Alias "$OB_OFS_CONFIG_FILE_NAME" | \
+            grep "$me" | \
+            wc -l` -ne "1" ]
+        then
+            echo -e "\nI don't know who I am :"$me":"
+            ob_cleanup
+        fi
+        # copy over the config file.
+        scp -o "StrictHostKeyChecking no" "$OB_OFS_CONFIG_FILE_NAME" \
+            "$OB_EX_IP": > /dev/null 2>&1
+        if [ "$?" -gt "0" ]
+        then
+            echo -e "\nscp ofs config to :"$OB_HOST": failed."
+            ob_cleanup
+        fi
 
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
-			pvfs2-server "$OB_OFS_CONFIG_FILE_NAME" -f \
-				-a "$me" \
-					> /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\nstorage failed on :"$OB_HOST":"$j":"
-			ob_cleanup
-		fi
+        ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
+            pvfs2-server "$OB_OFS_CONFIG_FILE_NAME" -f \
+                -a "$me" \
+                    > /dev/null 2>&1
+        if [ "$?" -gt "0" ]
+        then
+            echo -e "\nstorage failed on :"$OB_HOST":"$j":"
+            ob_cleanup
+        fi
 
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
-			pvfs2-server "$OB_OFS_CONFIG_FILE_NAME" \
-				-a "$me" \
-					> /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\nofs server on :"$OB_HOST":""$j"" failed."
-			ob_cleanup
-		fi
-		echo -n "."
-	done
+        ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" sudo \
+            pvfs2-server "$OB_OFS_CONFIG_FILE_NAME" \
+                -a "$me" \
+                    > /dev/null 2>&1
+        if [ "$?" -gt "0" ]
+        then
+            echo -e "\nofs server on :"$OB_HOST":""$j"" failed."
+            ob_cleanup
+        fi
+        echo -n "."
+    done
 done
 echo " done."
 echo
@@ -944,51 +944,51 @@ echo
 echo -n "Testing connectivity to port 22 on io500 servers. "
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_TRYS=$OB_ATTEMPTS
-	while [ "$OB_TRYS" -gt "0" ] && \
-		! nc -z ${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]} 22
-	do
-		sleep $OB_SLEEP
-		OB_TRYS=$(( OB_TRYS - 1 ))
-		if [ "$OB_TRYS" -eq "0" ]
-		then
-			echo -e "\nno response from " \
-			"${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}" \
-			"on port 22."
-			ob_cleanup
-		fi
-	done
-	echo -n "."
+    OB_TRYS=$OB_ATTEMPTS
+    while [ "$OB_TRYS" -gt "0" ] && \
+        ! nc -z ${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]} 22
+    do
+        sleep $OB_SLEEP
+        OB_TRYS=$(( OB_TRYS - 1 ))
+        if [ "$OB_TRYS" -eq "0" ]
+        then
+            echo -e "\nno response from " \
+            "${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}" \
+            "on port 22."
+            ob_cleanup
+        fi
+    done
+    echo -n "."
 done
 echo " done."
 
 echo -n "add io500 client internal IP addrs to each clients's host file. "
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
-	echo "$OB_IN_IP"" ""$OB_HOST" >> hostfile
+    OB_IN_IP="${OB_IN_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
+    echo "$OB_IN_IP"" ""$OB_HOST" >> hostfile
 done
 # append the local host file onto the end of all the io500 client host files.
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
-	scp -o "StrictHostKeyChecking no" \
-		hostfile "$OB_EX_IP": > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nscp host file to :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo sh -c \'cat hostfile \>\> /etc/hosts\' > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nappend hostfile on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	echo -n "."
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
+    scp -o "StrictHostKeyChecking no" \
+        hostfile "$OB_EX_IP": > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nscp host file to :"$OB_HOST": failed."
+        ob_cleanup
+    fi
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        sudo sh -c \'cat hostfile \>\> /etc/hosts\' > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nappend hostfile on :"$OB_HOST": failed."
+        ob_cleanup
+    fi
+    echo -n "."
 done
 echo " done."
 
@@ -1002,99 +1002,99 @@ echo " done."
 echo -n "create ssh key pairs for the clients"
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		ssh-keygen -b 2048 -t rsa -f .ssh/id_rsa -q -N \"\" \
-			> /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nssh-keygen on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        ssh-keygen -b 2048 -t rsa -f .ssh/id_rsa -q -N \"\" \
+            > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nssh-keygen on :"$OB_HOST": failed."
+        ob_cleanup
+    fi
 
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		cat .ssh/id_rsa.pub >> pub.keys 2> /dev/null
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nretrieve pub key from :"$OB_HOST": failed."
-		ob_cleanup
-	fi
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        cat .ssh/id_rsa.pub >> pub.keys 2> /dev/null
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nretrieve pub key from :"$OB_HOST": failed."
+        ob_cleanup
+    fi
 done
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
-	cat pub.keys | \
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-			"cat >> .ssh/authorized_keys" 2> /dev/null
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\n copy public keys to :"$OB_HOST": failed."
-		ob_cleanup
-	fi
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
+    cat pub.keys | \
+        ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+            "cat >> .ssh/authorized_keys" 2> /dev/null
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\n copy public keys to :"$OB_HOST": failed."
+        ob_cleanup
+    fi
 
-	for j in `seq 1 $OB_IO500_CLIENTS`
-	do
-		jth_host="$OB_IO500_NAME""${OB_SUFFIX[j]}"
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-			'ssh-keyscan -H '"$jth_host"' >> .ssh/known_hosts' \
-				2> /dev/null
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\n ssh-keyscan on :"$jth_host": failed."
-			ob_cleanup
-		fi
-	done
-	echo -n "."
+    for j in `seq 1 $OB_IO500_CLIENTS`
+    do
+        jth_host="$OB_IO500_NAME""${OB_SUFFIX[j]}"
+        ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+            'ssh-keyscan -H '"$jth_host"' >> .ssh/known_hosts' \
+                2> /dev/null
+        if [ "$?" -gt "0" ]
+        then
+            echo -e "\n ssh-keyscan on :"$jth_host": failed."
+            ob_cleanup
+        fi
+    done
+    echo -n "."
 done
 echo " done."
 
 echo -n "mount the orangefs filesystem on the io500 clients. "
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
 
-	# load the orangefs kernel module...
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo insmod /lib/modules/\`uname -r\`/kernel/fs/orangefs/orangefs.ko.xz > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nload kernel module on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	
-	# start the client
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo pvfs2-client -p /usr/sbin/pvfs2-client-core \
-			> /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nstart client on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
+    # load the orangefs kernel module...
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        sudo insmod /lib/modules/\`uname -r\`/kernel/fs/orangefs/orangefs.ko.xz > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nload kernel module on :"$OB_HOST": failed."
+        ob_cleanup
+    fi
 
-	# create /pvfsmnt
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo mkdir /pvfsmnt > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nmkdir /pvfsmnt on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
+    # start the client
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        sudo pvfs2-client -p /usr/sbin/pvfs2-client-core \
+            > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nstart client on :"$OB_HOST": failed."
+        ob_cleanup
+    fi
 
-	# mount the filesystem. Notice what "$OB_OFS_NAME"a resolves to.
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		sudo mount -t pvfs2 \
-			tcp://"$OB_OFS_NAME""${OB_SUFFIX[1]}":3334/orangefs /pvfsmnt \
-				> /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nmount to /pvfsmnt on :"$OB_HOST": failed."
-		ob_cleanup
-	fi
-	echo -n "."
+    # create /pvfsmnt
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        sudo mkdir /pvfsmnt > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nmkdir /pvfsmnt on :"$OB_HOST": failed."
+        ob_cleanup
+    fi
+
+    # mount the filesystem. Notice what "$OB_OFS_NAME"a resolves to.
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        sudo mount -t pvfs2 \
+            tcp://"$OB_OFS_NAME""${OB_SUFFIX[1]}":3334/orangefs /pvfsmnt \
+                > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nmount to /pvfsmnt on :"$OB_HOST": failed."
+        ob_cleanup
+    fi
+    echo -n "."
 done
 echo " done."
 
@@ -1106,21 +1106,21 @@ echo " done."
 sed -i "/${OB_OFS_NAME}/d" hostfile
 if [ "$?" -gt "0" ]
 then
-	echo "purge of servers in hostfile failed."
-	ob_cleanup
+    echo "purge of servers in hostfile failed."
+    ob_cleanup
 fi
 sed -i "s/^.* //" hostfile
 if [ "$?" -gt "0" ]
 then
-	echo "purge of ip addrs in hostfile failed."
-	ob_cleanup
+    echo "purge of ip addrs in hostfile failed."
+    ob_cleanup
 fi
 if [ "$OB_SLOTS" -gt "0" ]
 then
-	if [ "$OB_MPI_TYPE" = "intel" ]
-	then
-		OB_RUN_IO500=0
-		cat <<- SLOTS_MSG
+    if [ "$OB_MPI_TYPE" = "intel" ]
+    then
+        OB_RUN_IO500=0
+        cat <<- SLOTS_MSG
 
 		*********************** WARNING ***********************
 		 Intel MPI does not support "slots" in the hostfile.
@@ -1130,34 +1130,34 @@ then
 		*******************************************************
 
 		SLOTS_MSG
-	elif [ "$OB_MPI_TYPE" = "vanilla" ]
-	then
-		# MPICH wants the format "<HOST>:<NUM_SLOTS>"
-		sed -i "s/$/:$OB_SLOTS/" hostfile
-		if [ "$?" -gt "0" ]
-		then
-			echo "adding slots to hostfile failed."
-			ob_cleanup
-		fi
-	else
-		# OpenMPI wants the format "<HOST> slots=<NUM_SLOTS>"
-		sed -i "s/$/ slots=$OB_SLOTS/" hostfile
-		if [ "$?" -gt "0" ]
-		then
-			echo "adding slots to hostfile failed."
-			ob_cleanup
-		fi
-	fi
+    elif [ "$OB_MPI_TYPE" = "vanilla" ]
+    then
+        # MPICH wants the format "<HOST>:<NUM_SLOTS>"
+        sed -i "s/$/:$OB_SLOTS/" hostfile
+        if [ "$?" -gt "0" ]
+        then
+            echo "adding slots to hostfile failed."
+            ob_cleanup
+        fi
+    else
+        # OpenMPI wants the format "<HOST> slots=<NUM_SLOTS>"
+        sed -i "s/$/ slots=$OB_SLOTS/" hostfile
+        if [ "$?" -gt "0" ]
+        then
+            echo "adding slots to hostfile failed."
+            ob_cleanup
+        fi
+    fi
 fi
 
 if [ "$OB_MPI_TYPE" = "openmpi" ]
 then
-	OB_MPI_REPO="/home/io500_openmpi"
+    OB_MPI_REPO="/home/io500_openmpi"
 elif [ "$OB_MPI_TYPE" = "intel" ]
 then
-	OB_MPI_REPO="/home/io500_intel"
+    OB_MPI_REPO="/home/io500_intel"
 else
-	OB_MPI_REPO="/home/io500_vanilla"
+    OB_MPI_REPO="/home/io500_vanilla"
 fi
 
 # If mpi type is set to openmpi, then we need to provide
@@ -1165,91 +1165,91 @@ fi
 # "orted: command not found"...
 if [ "$OB_MPI_TYPE" = "openmpi" ]
 then
-	echo -n "add openmpi vars to .bashrc on io500 clients."
-	for i in `seq 1 $OB_IO500_CLIENTS`
-	do
-		OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
-		OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
-		ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-			sudo sh -c \'cat "$OB_MPI_REPO"/openmpivars \>\> .bashrc\' \
-				> /dev/null 2>&1
-		if [ "$?" -gt "0" ]
-		then
-			echo -e "\nappend opempivars on :"$OB_HOST": failed."
-			ob_cleanup
-		fi
-	echo -n "."
-	done
-	echo " done."
+    echo -n "add openmpi vars to .bashrc on io500 clients."
+    for i in `seq 1 $OB_IO500_CLIENTS`
+    do
+        OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+        OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
+        ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+            sudo sh -c \'cat "$OB_MPI_REPO"/openmpivars \>\> .bashrc\' \
+                > /dev/null 2>&1
+        if [ "$?" -gt "0" ]
+        then
+            echo -e "\nappend opempivars on :"$OB_HOST": failed."
+            ob_cleanup
+        fi
+    echo -n "."
+    done
+    echo " done."
 fi
 
 # copy io500 configs over to the io500 clients.
 echo -n "copy io500 configs to the io500 clients. "
 for i in `seq 1 $OB_IO500_CLIENTS`
 do
-	OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
-	OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		gsutil cp "$OB_BUCKET"/config-custom.ini \
-		   "$OB_IO500_CONFIG" > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo "bucket copy custom config to :""$OB_HOST"": failed."
-		ob_cleanup
-	fi
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-		gsutil cp "$OB_BUCKET"/io500.sh \
-			"$OB_IO500_CONFIG" > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo "bucket copy io500.sh to :""$OB_HOST"": failed."
-		ob_cleanup
-	fi
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[i]}"]}"
+    OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[i]}"
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        gsutil cp "$OB_BUCKET"/config-custom.ini \
+           "$OB_IO500_CONFIG" > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo "bucket copy custom config to :""$OB_HOST"": failed."
+        ob_cleanup
+    fi
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+        gsutil cp "$OB_BUCKET"/io500.sh \
+            "$OB_IO500_CONFIG" > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo "bucket copy io500.sh to :""$OB_HOST"": failed."
+        ob_cleanup
+    fi
 
-	# copy client hostnames in hostfile to io500/hostfile.
-	scp -o "StrictHostKeyChecking no" \
-		hostfile "$OB_EX_IP":"$OB_IO500_CONFIG" > /dev/null 2>&1
-	if [ "$?" -gt "0" ]
-	then
-		echo -e "\nscp client list file to :"$OB_HOST": failed."
-		ob_cleanup
-	fi
+    # copy client hostnames in hostfile to io500/hostfile.
+    scp -o "StrictHostKeyChecking no" \
+        hostfile "$OB_EX_IP":"$OB_IO500_CONFIG" > /dev/null 2>&1
+    if [ "$?" -gt "0" ]
+    then
+        echo -e "\nscp client list file to :"$OB_HOST": failed."
+        ob_cleanup
+    fi
 done
 echo " done."
 
 # run io500 on the "a" or "01" io500 client.
 if [ "$OB_IO500_CLIENTS" -gt "0" ] && [ "$OB_RUN_IO500" -gt "0" ]
 then
-        OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[1]}"]}"
-        OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[1]}"
+    OB_EX_IP="${OB_EX_ETC_HOSTS["$OB_IO500_NAME""${OB_SUFFIX[1]}"]}"
+    OB_HOST="$OB_IO500_NAME""${OB_SUFFIX[1]}"
 
-	# run io500.sh
-	echo "start io500 on :""$OB_HOST"":."
-	if [ "$OB_MPI_TYPE" = "intel" ]
-	then
-		  mpi_setup_script="/opt/intel/oneapi/setvars.sh"
-	elif [ "$OB_MPI_TYPE" = "openmpi" ]
-	then
-		  mpi_setup_script="$OB_MPI_REPO"/setvars_openmpi.sh
-	else
-		  mpi_setup_script="$OB_MPI_REPO"/setvars_vanilla.sh
-	fi
+    # run io500.sh
+    echo "start io500 on :""$OB_HOST"":."
+    if [ "$OB_MPI_TYPE" = "intel" ]
+    then
+        mpi_setup_script="/opt/intel/oneapi/setvars.sh"
+    elif [ "$OB_MPI_TYPE" = "openmpi" ]
+    then
+        mpi_setup_script="$OB_MPI_REPO"/setvars_openmpi.sh
+    else
+        mpi_setup_script="$OB_MPI_REPO"/setvars_vanilla.sh
+    fi
 
-	ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
-	  '(. '"$mpi_setup_script"'; \
-	     cd '"$OB_MPI_REPO"'/io500; \
-		chmod 764 '"$OB_IO500_CONFIG"'/io500.sh; \
-			'"$OB_IO500_CONFIG"'/io500.sh \
-				'"$OB_IO500_CONFIG"'/config-custom.ini)' \
-					> /dev/null 2>&1
+    ssh -o "StrictHostKeyChecking no" "$OB_EX_IP" \
+      '(. '"$mpi_setup_script"'; \
+         cd '"$OB_MPI_REPO"'/io500; \
+        chmod 764 '"$OB_IO500_CONFIG"'/io500.sh; \
+            '"$OB_IO500_CONFIG"'/io500.sh \
+                '"$OB_IO500_CONFIG"'/config-custom.ini)' \
+                    > /dev/null 2>&1
 
-	if [ "$?" -gt "0" ]
-	then
-		echo "io500 failed to run on :""$OB_HOST"":."
-		ob_cleanup
-	fi
+    if [ "$?" -gt "0" ]
+    then
+        echo "io500 failed to run on :""$OB_HOST"":."
+        ob_cleanup
+    fi
 else
-	echo "everything should be set up, you'll have to run io500 manually"
+    echo "everything should be set up, you'll have to run io500 manually"
 fi
 
 echo
