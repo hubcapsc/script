@@ -50,7 +50,7 @@ OB_IO500_CONFIG="/var/tmp"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-2"
 #OB_IMAGE=" --image hubcap-fc34-guestenv-gvnic-io500-3"
-OB_IMAGE="david-io500-sc22-update-8"
+OB_IMAGE="orangefs-io500-sc22-ns"
 OB_IMAGE_ARG=" --image=${OB_IMAGE}"
 
 OB_SCOPE="cloud-platform"
