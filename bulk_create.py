@@ -65,6 +65,7 @@ class OBOptions:
             self.startup_script = None
 
         self.list_instances = args.list_instances
+        self.output_file = args.output_file
 
 def initialize_parser():
     parser = argparse.ArgumentParser()
@@ -165,6 +166,10 @@ def initialize_parser():
             "--list-instances",
             action="store_true",
             help="include the names of the created instances in the output")
+    parser.add_argument(
+            "--output-file",
+            default=None,
+            help="file to write names of created instances to")
 
     return parser
 
@@ -413,6 +418,11 @@ def print_instance_list(instance_list):
         # print(f"{Colors.GREEN}{instance_name}{Colors.END}")
         prGreen(instance_name)
 
+def write_instance_list(out_file, instance_list):
+    with open(out_file, 'w') as f:
+        for instance_name in instance_list:
+            f.write(f"{instance_name}\n")
+
 def create_instances(compute, opts, network_interface, inst_type):
     if inst_type == OBInstType.SERVER:
         is_server = True
@@ -473,11 +483,17 @@ if __name__ == "__main__":
 
     net_int = setup_network_interface(ob_opts)
 
+    instances = []
     if args.num_servers > 0:
         servers = create_instances(compute, ob_opts, net_int, OBInstType.SERVER)
         if ob_opts.list_instances:
             print_instance_list(servers)
+        instances.extend(servers)
     if args.num_clients > 0:
         clients = create_instances(compute, ob_opts, net_int, OBInstType.CLIENT)
         if ob_opts.list_instances:
             print_instance_list(clients)
+        instances.extend(clients)
+
+    if ob_opts.output_file:
+        write_instance_list(ob_opts.output_file, instances)

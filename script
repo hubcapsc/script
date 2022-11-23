@@ -435,6 +435,10 @@ fi
 
 echo ""
 
+OB_INSTANCE_FILE="instances.txt"
+# clean up leftover output file from previous runs
+rm -f "$OB_INSTANCE_FILE"
+
 # define an "enum" for instance types
 TYPE_OFS_SERVER=0
 TYPE_IO500_CLIENT=1
@@ -504,6 +508,9 @@ basic_create() {
             echo "creation of ""$instance_name""${OB_SUFFIX[i]}"" failed."
             ob_cleanup
         fi
+
+        # write instance name to file
+        echo "${instance_name}${OB_SUFFIX[i]}" >> "$OB_INSTANCE_FILE"
     done
 }
 
@@ -522,6 +529,7 @@ bulk_create() {
     OB_CMD+=" --client-metadata=$OB_CLIENT_METADATA"
     OB_CMD+=" --num-ssd-per-server=$OB_SSD_NUM"
     OB_CMD+=" --threads-per-core=$OB_THREADS_PER_CORE"
+    OB_CMD+=" --output-file=$OB_INSTANCE_FILE"
 
     if [ -n "${OB_SUBNET}" ]
     then
